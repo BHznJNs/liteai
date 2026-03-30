@@ -26,6 +26,9 @@ class FakeAsyncStream:
         self._index += 1
         return value
 
+    async def close(self):
+        pass
+
 
 class FakeModelsAPI:
     def __init__(self, model_ids: list[str]):
@@ -54,6 +57,9 @@ class FakeClient:
 
     def with_options(self, **kwargs: Any):
         return self
+
+    async def close(self):
+        pass
 
 class StubParamParser:
     def __init__(self, *, nonstream: dict[str, Any], stream: dict[str, Any]):

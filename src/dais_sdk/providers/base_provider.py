@@ -40,3 +40,6 @@ class BaseProvider(ABC):
 
     @abstractmethod
     def request_stream(self, params: LlmRequestParams) -> StreamMessageGenerator: ...
+
+    @abstractmethod
+    async def close(self): ...

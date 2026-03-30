@@ -1,8 +1,18 @@
 import json
 from typing import TYPE_CHECKING
+from ..providers.exception import (
+    ProviderError,
+    ProviderAuthenticationError,
+    ProviderBadRequestError,
+    ProviderRateLimitError,
+    ProviderServerError,
+    ProviderNetworkError,
+    ProviderTimeoutError,
+    AttachmentTypeNotSupportedError,
+)
 
 if TYPE_CHECKING:
-    from .tool import ToolLike
+    from ..tool.types import ToolLike
 
 class LlmToolException(Exception): ...
 
@@ -25,13 +35,6 @@ class ToolExecutionError(LlmToolException):
         self.arguments = arguments
         self.raw_error = raw_error
 
-class LlmProviderException(Exception): ...
-
-class AttachmentTypeNotSupportedError(LlmProviderException):
-    def __init__(self, attachment_type: str):
-        super().__init__(f"Attachment type not supported: ", attachment_type)
-        self.attachment_type = attachment_type
-
 class SkillException(Exception): ...
 
 class InvalidSkillArchiveError(SkillException):
@@ -45,9 +48,15 @@ __all__ = [
     "ToolArgumentDecodeError",
     "ToolExecutionError",
 
-    "LlmProviderException",
+    "ProviderError",
+    "ProviderAuthenticationError",
+    "ProviderBadRequestError",
+    "ProviderRateLimitError",
+    "ProviderServerError",
+    "ProviderNetworkError",
+    "ProviderTimeoutError",
     "AttachmentTypeNotSupportedError",
-    
+
     "SkillException",
     "InvalidSkillArchiveError",
 ]

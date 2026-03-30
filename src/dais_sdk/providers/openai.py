@@ -1,7 +1,16 @@
 import json
 import re
 from typing import Literal, cast, override
-from openai import AsyncOpenAI
+from openai import (
+    AsyncOpenAI,
+    AsyncStream,
+    APIError,
+    APITimeoutError,
+    APIConnectionError,
+    AuthenticationError,
+    BadRequestError,
+    RateLimitError,
+)
 from openai.types.shared_params import FunctionDefinition
 from openai.types.chat import (
     ChatCompletion,
@@ -22,10 +31,18 @@ from openai.types.chat.chat_completion_chunk import ChoiceDelta
 from openai.types.chat.completion_create_params import CompletionCreateParamsNonStreaming, CompletionCreateParamsStreaming
 from pydantic import BaseModel
 from .base_provider import BaseProvider, BaseMessageParser, BaseParamParser
+from .exception import (
+    ProviderAuthenticationError,
+    ProviderRateLimitError,
+    ProviderServerError,
+    ProviderNetworkError,
+    ProviderTimeoutError,
+    ProviderBadRequestError,
+    AttachmentTypeNotSupportedError,
+)
 from .utils import StreamMessageCollector, StrictInlineJsonSchema
 from ..tool.prepare import prepare_tools
 from ..types.attachment import Attachment, AudioAttachment, ImageAttachment
-from ..types.exceptions import AttachmentTypeNotSupportedError
 from ..types.request_params import LlmRequestParams
 from ..types.message import BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage
 from ..types.event import AssistantMessageEvent, StreamMessageGenerator, TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
@@ -273,28 +290,66 @@ class OpenAIProvider(BaseProvider):
     @override
     async def request_nonstream(self, params: LlmRequestParams):
         parsed = self._param_parser.parse_nonstream(params)
-        response = await self._client.with_options(timeout=params.timeout_sec).chat.completions.create(
-            **parsed,
-            extra_headers=params.headers,
-        )
+        timeout_client = self._client.with_options(timeout=params.timeout_sec)
+        try:
+            response = await timeout_client.chat.completions.create(
+                **parsed,
+                extra_headers=params.headers,
+            )
+        except AuthenticationError as e:
+            raise ProviderAuthenticationError(e.message) from e
+        except BadRequestError as e:
+            raise ProviderBadRequestError(e.message) from e
+        except RateLimitError as e:
+            raise ProviderRateLimitError(e.message) from e
+        except APITimeoutError as e:
+            raise ProviderTimeoutError(e.message) from e
+        except APIConnectionError as e:
+            raise ProviderNetworkError(e.message) from e
+        except APIError as e:
+            raise ProviderServerError(e.message) from e
+
         message = self._message_parser.to_message(response)
         return self._parse_thinking_content(message)
 
     @override
     async def request_stream(self, params: LlmRequestParams) -> StreamMessageGenerator:
         parsed = self._param_parser.parse_stream(params)
-        response = await self._client.with_options(timeout=params.timeout_sec).chat.completions.create(
-            **parsed,
-            extra_headers=params.headers,
-        )
-        message_collector = StreamMessageCollector()
-        async for chunk in response:
-            normalized_chunks = self._message_parser.normalize_chunk(chunk)
-            if normalized_chunks is None: continue
-            for normalized in normalized_chunks:
-                yield normalized
-                message_collector.collect(normalized)
+        timeout_client = self._client.with_options(timeout=params.timeout_sec)
+
+        response: AsyncStream | None = None
+        try:
+            response = await timeout_client.chat.completions.create(
+                **parsed,
+                extra_headers=params.headers,
+            )
+            message_collector = StreamMessageCollector()
+            async for chunk in response:
+                normalized_chunks = self._message_parser.normalize_chunk(chunk)
+                if normalized_chunks is None: continue
+                for normalized in normalized_chunks:
+                    yield normalized
+                    message_collector.collect(normalized)
+        except AuthenticationError as e:
+            raise ProviderAuthenticationError(e.message) from e
+        except BadRequestError as e:
+            raise ProviderBadRequestError(e.message) from e
+        except RateLimitError as e:
+            raise ProviderRateLimitError(e.message) from e
+        except APITimeoutError as e:
+            raise ProviderTimeoutError(e.message) from e
+        except APIConnectionError as e:
+            raise ProviderNetworkError(e.message) from e
+        except APIError as e:
+            raise ProviderServerError(e.message) from e
+        finally:
+            if response:
+                await response.close()
 
         full_message = message_collector.get_message()
         full_message = self._parse_thinking_content(full_message)
         yield AssistantMessageEvent(message=full_message)
+
+    @override
+    async def close(self):
+        await self._client.close()

@@ -48,3 +48,6 @@ class LLM:
                     yield chunk
                 except StopAsyncIteration:
                     break
+
+    async def close(self):
+        await self._provider.close()

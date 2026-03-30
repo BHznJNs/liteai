@@ -1,17 +1,35 @@
 import json
 from typing import Literal, cast, override
-from anthropic import AsyncAnthropic, ParsedMessageStreamEvent
+from anthropic import (
+    AsyncAnthropic,
+    ParsedMessageStreamEvent,
+    AuthenticationError,
+    BadRequestError,
+    RateLimitError,
+    APITimeoutError,
+    APIConnectionError,
+    APIError,
+)
 from anthropic.types import ImageBlockParam, Message, MessageParam, TextBlockParam, ToolChoiceAnyParam, ToolChoiceAutoParam, ToolChoiceNoneParam, ToolParam, ToolResultBlockParam, ToolUseBlock, ToolUseBlockParam
 from anthropic.types.message_create_params import MessageCreateParamsBase, MessageCreateParamsNonStreaming
 from anthropic.types.text_block_param import TextBlockParam
 from anthropic.types.tool_param import InputSchema
 from pydantic import BaseModel
 from .base_provider import BaseMessageParser, BaseParamParser, BaseProvider
+from .exception import (
+    ProviderAuthenticationError,
+    ProviderBadRequestError,
+    ProviderRateLimitError,
+    ProviderNetworkError,
+    ProviderTimeoutError,
+    ProviderServerError,
+    AttachmentTypeNotSupportedError,
+)
 from .utils import StreamMessageCollector, StrictInlineJsonSchema
 from ..tool.prepare import prepare_tools
 from ..types import (
     LlmRequestParams,
-    Attachment, ImageAttachment, AttachmentTypeNotSupportedError,
+    Attachment, ImageAttachment,
     BaseMessage, SystemMessage, UserMessage, ToolMessage, AssistantMessage,
     TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent, AssistantMessageEvent,
 )
@@ -243,11 +261,24 @@ class AnthropicProvider(BaseProvider):
     @override
     async def request_nonstream(self, params: LlmRequestParams):
         parsed = self._param_parser.parse_nonstream(params)
-        response = await self._client.messages.create(
-            **parsed,
-            timeout=params.timeout_sec,
-            extra_headers=params.headers,
-        )
+        try:
+            response = await self._client.messages.create(
+                **parsed,
+                timeout=params.timeout_sec,
+                extra_headers=params.headers,
+            )
+        except AuthenticationError as e:
+            raise ProviderAuthenticationError(e.message) from e
+        except BadRequestError as e:
+            raise ProviderBadRequestError(e.message) from e
+        except RateLimitError as e:
+            raise ProviderRateLimitError(e.message) from e
+        except APITimeoutError as e:
+            raise ProviderTimeoutError(e.message) from e
+        except APIConnectionError as e:
+            raise ProviderNetworkError(e.message) from e
+        except APIError as e:
+            raise ProviderServerError(e.message) from e
         return self._message_parser.to_message(response)
 
     @override
@@ -255,28 +286,45 @@ class AnthropicProvider(BaseProvider):
         parsed = self._param_parser.parse_stream(params)
         message_collector = StreamMessageCollector()
 
-        async with self._client.messages.stream(
-            **parsed,
-            timeout=params.timeout_sec,
-            extra_headers=params.headers,
-        ) as stream:
-            async for event in stream:
-                normalized_chunks = self._message_parser.normalize_chunk(event)
-                for chunk in normalized_chunks:
-                    yield chunk
-                    message_collector.collect(chunk)
+        try:
+            async with self._client.messages.stream(
+                **parsed,
+                timeout=params.timeout_sec,
+                extra_headers=params.headers,
+            ) as stream:
+                async for event in stream:
+                    normalized_chunks = self._message_parser.normalize_chunk(event)
+                    for chunk in normalized_chunks:
+                        yield chunk
+                        message_collector.collect(chunk)
 
-            message = await stream.get_final_message()
-            yield UsageChunkEvent(
-                input_tokens=message.usage.input_tokens,
-                output_tokens=message.usage.output_tokens,
-                total_tokens=message.usage.input_tokens + message.usage.output_tokens,
-            )
+                message = await stream.get_final_message()
+                yield UsageChunkEvent(
+                    input_tokens=message.usage.input_tokens,
+                    output_tokens=message.usage.output_tokens,
+                    total_tokens=message.usage.input_tokens + message.usage.output_tokens,
+                )
 
-            full_message = message_collector.get_message()
-            full_message.usage = AssistantMessage.Usage(
-                input_tokens=message.usage.input_tokens,
-                output_tokens=message.usage.output_tokens,
-                total_tokens=message.usage.input_tokens + message.usage.output_tokens,
-            )
-            yield AssistantMessageEvent(message=full_message)
+                full_message = message_collector.get_message()
+                full_message.usage = AssistantMessage.Usage(
+                    input_tokens=message.usage.input_tokens,
+                    output_tokens=message.usage.output_tokens,
+                    total_tokens=message.usage.input_tokens + message.usage.output_tokens,
+                )
+                yield AssistantMessageEvent(message=full_message)
+        except AuthenticationError as e:
+            raise ProviderAuthenticationError(e.message) from e
+        except BadRequestError as e:
+            raise ProviderBadRequestError(e.message) from e
+        except RateLimitError as e:
+            raise ProviderRateLimitError(e.message) from e
+        except APITimeoutError as e:
+            raise ProviderTimeoutError(e.message) from e
+        except APIConnectionError as e:
+            raise ProviderNetworkError(e.message) from e
+        except APIError as e:
+            raise ProviderServerError(e.message) from e
+
+    @override
+    async def close(self):
+        await self._client.close()
