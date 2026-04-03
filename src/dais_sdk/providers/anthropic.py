@@ -247,11 +247,15 @@ class AnthropicProviderParamParser(BaseParamParser[
 class AnthropicProvider(BaseProvider):
     def __init__(self, base_url: str, api_key: str):
         self._client = AsyncAnthropic(
-            base_url=base_url,
+            base_url=AnthropicProvider._base_url_preprocess(base_url),
             api_key=api_key,
         )
         self._message_parser = AnthropicProviderMessageParser()
         self._param_parser = AnthropicProviderParamParser(self._message_parser)
+
+    @staticmethod
+    def _base_url_preprocess(base_url: str) -> str:
+        return base_url.rstrip("/").removesuffix("/v1")
 
     @override
     async def list_models(self) -> list[str]:
