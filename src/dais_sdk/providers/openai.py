@@ -90,7 +90,11 @@ class OpenAIProviderMessageParser(BaseMessageParser[
                 output_tokens=chunk.usage.completion_tokens,
                 total_tokens=chunk.usage.total_tokens))
 
-        delta: ChoiceDelta = chunk.choices[0].delta
+        delta: ChoiceDelta | None = chunk.choices[0].delta
+        if delta is None:
+            # The delta will be None for some cases
+            # when the provider returns empty data.
+            return None
         if delta.content:
             result.append(TextChunkEvent(delta.content))
         if delta.tool_calls:
