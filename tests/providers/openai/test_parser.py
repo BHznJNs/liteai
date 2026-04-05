@@ -5,6 +5,7 @@ import pytest
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from dais_sdk.providers.openai import OpenAIProviderMessageParser
+from dais_sdk.types import Base64Source, ImageBlock, TextBlock
 from dais_sdk.types.event import TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
 from dais_sdk.types.message import AssistantMessage, SystemMessage, ToolMessage, UserMessage
 
@@ -161,6 +162,26 @@ def test_from_message_system_and_user() -> None:
     assert parsed_system["content"] == "system prompt"
     assert parsed_user["role"] == "user"
     assert parsed_user["content"] == "hello"
+
+
+def test_from_message_user_with_text_and_image_blocks() -> None:
+    user_msg = UserMessage(
+        content="hello",
+        attachments=[
+            TextBlock(text="extra text"),
+            ImageBlock(source=Base64Source(mime_type="image/png", data="abc")),
+        ],
+    )
+
+    parsed_user = cast(dict[str, Any], OpenAIProviderMessageParser.from_message(user_msg))
+
+    assert parsed_user["role"] == "user"
+    content = cast(list[dict[str, Any]], parsed_user["content"])
+    assert content[0]["type"] == "text"
+    assert content[0]["text"] == "hello"
+    assert content[1]["type"] == "text"
+    assert content[1]["text"] == "extra text"
+    assert content[2]["type"] == "image_url"
 
 
 def test_from_message_assistant_with_tool_calls() -> None:

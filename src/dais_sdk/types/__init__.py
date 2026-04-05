@@ -1,4 +1,4 @@
-from .attachment import *
+from .content_block import *
 from .event import *
 from .exceptions import *
 from .message import *

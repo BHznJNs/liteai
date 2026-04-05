@@ -12,7 +12,6 @@ from anthropic import (
 )
 from anthropic.types import ImageBlockParam, Message, MessageParam, TextBlockParam, ToolChoiceAnyParam, ToolChoiceAutoParam, ToolChoiceNoneParam, ToolParam, ToolResultBlockParam, ToolUseBlock, ToolUseBlockParam
 from anthropic.types.message_create_params import MessageCreateParamsBase, MessageCreateParamsNonStreaming
-from anthropic.types.text_block_param import TextBlockParam
 from anthropic.types.tool_param import InputSchema
 from pydantic import BaseModel
 from .base_provider import BaseMessageParser, BaseParamParser, BaseProvider
@@ -23,13 +22,13 @@ from .exception import (
     ProviderNetworkError,
     ProviderTimeoutError,
     ProviderServerError,
-    AttachmentTypeNotSupportedError,
+    ContentBlockTypeNotSupportedError,
 )
 from .utils import StreamMessageCollector, StrictInlineJsonSchema
 from ..tool.prepare import prepare_tools
 from ..types import (
     LlmRequestParams,
-    Attachment, ImageAttachment,
+    ContentBlock, ImageBlock, TextBlock,
     BaseMessage, SystemMessage, UserMessage, ToolMessage, AssistantMessage,
     TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent, AssistantMessageEvent,
 )
@@ -41,29 +40,31 @@ class AnthropicProviderMessageParser(BaseMessageParser[
     MessageParam,
 ]):
     @staticmethod
-    def _attachment_to_content_part(attachment: Attachment) -> ImageBlockParam:
-        match attachment:
-            case ImageAttachment() if attachment.source.type == "url":
+    def _content_block_to_content_part(content_block: ContentBlock) -> TextBlockParam | ImageBlockParam:
+        match content_block:
+            case TextBlock():
+                return TextBlockParam(type="text", text=content_block.text)
+            case ImageBlock() if content_block.source.type == "url":
                 # Anthropic supports URL sources for images
                 return ImageBlockParam(
                     type="image",
-                    source={"type": "url", "url": attachment.source.url},
+                    source={"type": "url", "url": content_block.source.url},
                 )
-            case ImageAttachment() if attachment.source.type == "base64":
-                if attachment.source.mime_type not in ["image/jpeg", "image/png", "image/gif", "image/webp"]:
-                    raise AttachmentTypeNotSupportedError(attachment.source.mime_type)
-                media_type = cast(Literal["image/jpeg", "image/png", "image/gif", "image/webp"], attachment.source.mime_type)
+            case ImageBlock() if content_block.source.type == "base64":
+                if content_block.source.mime_type not in ["image/jpeg", "image/png", "image/gif", "image/webp"]:
+                    raise ContentBlockTypeNotSupportedError(content_block.source.mime_type)
+                media_type = cast(Literal["image/jpeg", "image/png", "image/gif", "image/webp"], content_block.source.mime_type)
                 return ImageBlockParam(
                     type="image",
                     source={
                         "type": "base64",
                         "media_type": media_type,
-                        "data": attachment.source.data
+                        "data": content_block.source.data
                     },
                 )
             case _:
                 # Anthropic does not support audio input via the messages API
-                raise AttachmentTypeNotSupportedError(attachment.type)
+                raise ContentBlockTypeNotSupportedError(content_block.type)
 
     @staticmethod
     def normalize_chunk(chunk: ParsedMessageStreamEvent) -> list[TextChunkEvent | ToolCallChunkEvent | UsageChunkEvent]:
@@ -85,7 +86,7 @@ class AnthropicProviderMessageParser(BaseMessageParser[
         content_text: str | None = None
         reasoning_content: str | None = None
         tool_calls: list[AssistantMessage.ToolCall] | None = None
- 
+
         for block in response.content:
             if block.type == "text":
                 content_text = block.text
@@ -99,7 +100,7 @@ class AnthropicProviderMessageParser(BaseMessageParser[
                     name=block.name,
                     arguments=block.input,
                 ))
- 
+
         usage = response.usage
         return AssistantMessage(
             content=content_text,
@@ -123,12 +124,12 @@ class AnthropicProviderMessageParser(BaseMessageParser[
                 parts: list[TextBlockParam | ImageBlockParam] = [
                     TextBlockParam(type="text", text=message.content)
                 ]
-                for attachment in message.attachments:
+                for content_block in message.attachments:
                     parts.append(
-                        AnthropicProviderMessageParser._attachment_to_content_part(attachment)
+                        AnthropicProviderMessageParser._content_block_to_content_part(content_block)
                     )
                 return MessageParam(role="user", content=parts)
- 
+
             case AssistantMessage():
                 content_blocks = []
                 if message.content is not None:
@@ -143,14 +144,14 @@ class AnthropicProviderMessageParser(BaseMessageParser[
                             name=tc.name,
                             input=tc.arguments,
                         ))
- 
+
                 # Anthropic rejects an assistant message with an empty content array,
                 # fall back to an empty string if there is nothing.
                 if len(content_blocks) == 0:
                     content_blocks.append(TextBlockParam(type="text", text=""))
 
                 return MessageParam(role="assistant", content=content_blocks)
- 
+
             case ToolMessage() as message:
                 # Anthropic tool results travel as a *user* message containing a tool_result block.
                 return MessageParam(
@@ -161,7 +162,7 @@ class AnthropicProviderMessageParser(BaseMessageParser[
                         content=message.content,
                     )],
                 )
- 
+
             case SystemMessage():
                 raise ValueError(
                     "SystemMessage must be passed as the `system` parameter, "

@@ -3,7 +3,7 @@ import uuid
 from abc import ABC
 from typing import Annotated, Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Discriminator, Field, field_validator
-from .attachment import Attachment
+from .content_block import ContentBlock
 
 class BaseMessage(BaseModel, ABC):
     model_config = ConfigDict(
@@ -112,7 +112,7 @@ class UserMessage(BaseMessage):
     })
 
     content: str
-    attachments: list[Attachment] | None = None
+    attachments: list[ContentBlock] | None = None
     role: Literal["user"] = "user"
 
 type Message = Annotated[

@@ -10,10 +10,10 @@ class ProviderBadRequestError(ProviderError):
     def __init__(self, message: str):
         super().__init__(f"Provider bad request error: {message}")
 
-class AttachmentTypeNotSupportedError(ProviderBadRequestError):
-    def __init__(self, attachment_type: str):
-        super().__init__(f"Attachment type not supported: {attachment_type}")
-        self.attachment_type = attachment_type
+class ContentBlockTypeNotSupportedError(ProviderBadRequestError):
+    def __init__(self, content_block_type: str):
+        super().__init__(f"Content block type not supported: {content_block_type}")
+        self.content_block_type = content_block_type
 
 class ProviderAuthenticationError(ProviderError):
     def __init__(self, message: str):

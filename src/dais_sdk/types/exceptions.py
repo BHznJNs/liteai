@@ -8,7 +8,7 @@ from ..providers.exception import (
     ProviderServerError,
     ProviderNetworkError,
     ProviderTimeoutError,
-    AttachmentTypeNotSupportedError,
+    ContentBlockTypeNotSupportedError,
 )
 
 if TYPE_CHECKING:
@@ -55,7 +55,7 @@ __all__ = [
     "ProviderServerError",
     "ProviderNetworkError",
     "ProviderTimeoutError",
-    "AttachmentTypeNotSupportedError",
+    "ContentBlockTypeNotSupportedError",
 
     "SkillException",
     "InvalidSkillArchiveError",

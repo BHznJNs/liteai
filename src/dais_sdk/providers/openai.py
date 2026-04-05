@@ -38,11 +38,11 @@ from .exception import (
     ProviderNetworkError,
     ProviderTimeoutError,
     ProviderBadRequestError,
-    AttachmentTypeNotSupportedError,
+    ContentBlockTypeNotSupportedError,
 )
 from .utils import StreamMessageCollector, StrictInlineJsonSchema
 from ..tool.prepare import prepare_tools
-from ..types.attachment import Attachment, AudioAttachment, ImageAttachment
+from ..types.content_block import ContentBlock, AudioBlock, ImageBlock, TextBlock
 from ..types.request_params import LlmRequestParams
 from ..types.message import BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage
 from ..types.event import AssistantMessageEvent, StreamMessageGenerator, TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
@@ -54,28 +54,33 @@ class OpenAIProviderMessageParser(BaseMessageParser[
     ChatCompletionMessageParam,
 ]):
     @staticmethod
-    def _attachment_to_content_part(attachment: Attachment) -> ChatCompletionContentPartParam:
-        match attachment:
-            case ImageAttachment() if attachment.source.type == "url":
+    def _content_block_to_content_part(content_block: ContentBlock) -> ChatCompletionContentPartParam:
+        match content_block:
+            case TextBlock():
+                return ChatCompletionContentPartTextParam(
+                    type="text",
+                    text=content_block.text,
+                )
+            case ImageBlock() if content_block.source.type == "url":
                 return ChatCompletionContentPartImageParam(
                     type="image_url",
-                    image_url={"url": attachment.source.url,
+                    image_url={"url": content_block.source.url,
                                "detail": "auto"})
-            case ImageAttachment() if attachment.source.type == "base64":
+            case ImageBlock() if content_block.source.type == "base64":
                 return ChatCompletionContentPartImageParam(
                     type="image_url",
-                    image_url={"url": f"data:{attachment.source.mime_type};base64,{attachment.source.data}",
+                    image_url={"url": f"data:{content_block.source.mime_type};base64,{content_block.source.data}",
                                "detail": "auto"})
-            case AudioAttachment() if attachment.source.type == "base64":
-                extname = attachment.source.mime_type.split("/")[-1]
+            case AudioBlock() if content_block.source.type == "base64":
+                extname = content_block.source.mime_type.split("/")[-1]
                 if extname not in ["mp3", "wav"]:
-                    raise AttachmentTypeNotSupportedError(f"audio/{extname}")
+                    raise ContentBlockTypeNotSupportedError(f"audio/{extname}")
                 return ChatCompletionContentPartInputAudioParam(
                     type="input_audio",
-                    input_audio={"data": attachment.source.data,
+                    input_audio={"data": content_block.source.data,
                                  "format": cast(Literal["mp3", "wav"], extname)})
             case _:
-                raise AttachmentTypeNotSupportedError(attachment.type)
+                raise ContentBlockTypeNotSupportedError(content_block.type)
 
     @override
     @staticmethod
@@ -151,8 +156,8 @@ class OpenAIProviderMessageParser(BaseMessageParser[
                     content=message.content,
                 )
             case UserMessage() if message.attachments is not None:
-                attachment_contents = [OpenAIProviderMessageParser._attachment_to_content_part(attachment)
-                                      for attachment in message.attachments]
+                attachment_contents = [OpenAIProviderMessageParser._content_block_to_content_part(content_block)
+                                      for content_block in message.attachments]
                 return ChatCompletionUserMessageParam(
                     role=message.role,
                     content=[

@@ -12,32 +12,37 @@ class UrlSource(BaseModel):
 
 type FileSource = Base64Source | UrlSource
 
-class ImageAttachment(BaseModel):
+class TextBlock(BaseModel):
+    type: Literal["text"] = "text"
+    text: str
+
+class ImageBlock(BaseModel):
     type: Literal["image"] = "image"
     source: FileSource
 
-class DocumentAttachment(BaseModel):
+class DocumentBlock(BaseModel):
     type: Literal["document"] = "document"
     source: FileSource
 
-class AudioAttachment(BaseModel):
+class AudioBlock(BaseModel):
     type: Literal["audio"] = "audio"
     source: FileSource
 
-class VideoAttachment(BaseModel):
+class VideoBlock(BaseModel):
     type: Literal["video"] = "video"
     source: FileSource
 
-type Attachment = ImageAttachment | DocumentAttachment | AudioAttachment | VideoAttachment
+type ContentBlock = TextBlock | ImageBlock | DocumentBlock | AudioBlock | VideoBlock
 
 __all__ = [
     "FileSource",
-    "Attachment",
+    "ContentBlock",
 
     "Base64Source",
     "UrlSource",
-    "ImageAttachment",
-    "DocumentAttachment",
-    "AudioAttachment",
-    "VideoAttachment",
+    "TextBlock",
+    "ImageBlock",
+    "DocumentBlock",
+    "AudioBlock",
+    "VideoBlock",
 ]
