@@ -3,7 +3,7 @@ from typing import Any, Literal, Sequence, TYPE_CHECKING
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from .tool import ToolLike
+    from . import ToolLike
     from ..tool.toolset import Toolset
     from .message import BaseMessage
 

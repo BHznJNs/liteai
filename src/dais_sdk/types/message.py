@@ -3,7 +3,7 @@ import uuid
 from abc import ABC
 from typing import Annotated, Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Discriminator, Field, field_validator
-from .content_block import ContentBlock
+from .content_block import ContentBlock, ContentBlockMetadata
 
 class BaseMessage(BaseModel, ABC):
     model_config = ConfigDict(
@@ -111,6 +111,11 @@ class UserMessage(BaseMessage):
         "required": ["content", "role"]
     })
 
+    content: str
+    attachments: list[ContentBlockMetadata] | None = None
+    role: Literal["user"] = "user"
+
+class ResolvedUserMessage(BaseMessage):
     content: str
     attachments: list[ContentBlock] | None = None
     role: Literal["user"] = "user"

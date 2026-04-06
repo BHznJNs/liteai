@@ -1,5 +1,6 @@
-from typing import Literal
+from typing import Any, Literal, Protocol
 from pydantic import BaseModel
+
 
 class Base64Source(BaseModel):
     type: Literal["base64"] = "base64"
@@ -34,10 +35,17 @@ class VideoBlock(BaseModel):
 
 type ContentBlock = TextBlock | ImageBlock | DocumentBlock | AudioBlock | VideoBlock
 
-__all__ = [
-    "FileSource",
-    "ContentBlock",
+type ContentBlockMetadata = dict[str, Any]
 
+class ContentBlockResolver(Protocol):
+    async def resolve(self, metadata: ContentBlockMetadata) -> ContentBlock: ...
+
+__all__ = [
+    "ContentBlock",
+    "ContentBlockMetadata",
+    "ContentBlockResolver",
+
+    "FileSource",
     "Base64Source",
     "UrlSource",
     "TextBlock",

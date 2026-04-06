@@ -42,10 +42,13 @@ from .exception import (
 )
 from .utils import StreamMessageCollector, StrictInlineJsonSchema
 from ..tool.prepare import prepare_tools
-from ..types.content_block import ContentBlock, AudioBlock, ImageBlock, TextBlock
-from ..types.request_params import LlmRequestParams
-from ..types.message import BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage
-from ..types.event import AssistantMessageEvent, StreamMessageGenerator, TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
+from ..types import (
+    LlmRequestParams,
+    ContentBlock, AudioBlock, ImageBlock, TextBlock,
+    BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
+    AssistantMessageEvent, StreamMessageGenerator, TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
+)
+from ..types.message import ResolvedUserMessage
 
 
 class OpenAIProviderMessageParser(BaseMessageParser[
@@ -150,12 +153,12 @@ class OpenAIProviderMessageParser(BaseMessageParser[
                     role=message.role,
                     content=message.content,
                 )
-            case UserMessage() if message.attachments is None:
+            case ResolvedUserMessage() if message.attachments is None:
                 return ChatCompletionUserMessageParam(
                     role=message.role,
                     content=message.content,
                 )
-            case UserMessage() if message.attachments is not None:
+            case ResolvedUserMessage() if message.attachments is not None:
                 attachment_contents = [OpenAIProviderMessageParser._content_block_to_content_part(content_block)
                                       for content_block in message.attachments]
                 return ChatCompletionUserMessageParam(
@@ -187,6 +190,8 @@ class OpenAIProviderMessageParser(BaseMessageParser[
                     content=message.content,
                     tool_call_id=message.call_id,
                 )
+            case UserMessage() as message:
+                raise ValueError(f"Encountered unresolved user message: {message}")
             case _:
                 raise NotImplementedError(f"Unsupported message type: {type(message)}")
 
@@ -293,7 +298,7 @@ class OpenAIProvider(BaseProvider):
 
     @override
     async def list_models(self) -> list[str]:
-        models = await self._client.models.list()            
+        models = await self._client.models.list()
         return [model.id for model in models.data]
 
     @override

@@ -7,7 +7,7 @@ from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from dais_sdk.providers.openai import OpenAIProviderMessageParser
 from dais_sdk.types import Base64Source, ImageBlock, TextBlock
 from dais_sdk.types.event import TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
-from dais_sdk.types.message import AssistantMessage, SystemMessage, ToolMessage, UserMessage
+from dais_sdk.types.message import AssistantMessage, ResolvedUserMessage, SystemMessage, ToolMessage, UserMessage
 
 
 def _chunk(
@@ -151,9 +151,9 @@ def test_to_message_maps_content_usage_and_tool_calls() -> None:
     assert result.tool_calls[0].arguments == {"a": 1, "b": 2}
 
 
-def test_from_message_system_and_user() -> None:
+def test_from_message_system_and_resolved_user() -> None:
     system_msg = SystemMessage(content="system prompt")
-    user_msg = UserMessage(content="hello")
+    user_msg = ResolvedUserMessage(content="hello")
 
     parsed_system = OpenAIProviderMessageParser.from_message(system_msg)
     parsed_user = OpenAIProviderMessageParser.from_message(user_msg)
@@ -164,8 +164,13 @@ def test_from_message_system_and_user() -> None:
     assert parsed_user["content"] == "hello"
 
 
-def test_from_message_user_with_text_and_image_blocks() -> None:
-    user_msg = UserMessage(
+def test_from_message_rejects_unresolved_user_message() -> None:
+    with pytest.raises(ValueError, match="Encountered unresolved user message"):
+        OpenAIProviderMessageParser.from_message(UserMessage(content="hello"))
+
+
+def test_from_message_resolved_user_with_text_and_image_blocks() -> None:
+    user_msg = ResolvedUserMessage(
         content="hello",
         attachments=[
             TextBlock(text="extra text"),

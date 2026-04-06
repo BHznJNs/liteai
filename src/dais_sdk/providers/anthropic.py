@@ -32,6 +32,7 @@ from ..types import (
     BaseMessage, SystemMessage, UserMessage, ToolMessage, AssistantMessage,
     TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent, AssistantMessageEvent,
 )
+from ..types.message import ResolvedUserMessage
 
 
 class AnthropicProviderMessageParser(BaseMessageParser[
@@ -117,10 +118,10 @@ class AnthropicProviderMessageParser(BaseMessageParser[
     @staticmethod
     def from_message(message: BaseMessage) -> MessageParam:
         match message:
-            case UserMessage() if message.attachments is None:
+            case ResolvedUserMessage() if message.attachments is None:
                 return MessageParam(role="user", content=message.content)
 
-            case UserMessage() if message.attachments is not None:
+            case ResolvedUserMessage() if message.attachments is not None:
                 parts: list[TextBlockParam | ImageBlockParam] = [
                     TextBlockParam(type="text", text=message.content)
                 ]
@@ -168,6 +169,9 @@ class AnthropicProviderMessageParser(BaseMessageParser[
                     "SystemMessage must be passed as the `system` parameter, "
                     "not in the messages array."
                 )
+
+            case UserMessage() as message:
+                raise ValueError(f"Encountered unresolved user message: {message}")
             case _:
                 raise NotImplementedError(
                     f"Unsupported message type: {type(message)}"
