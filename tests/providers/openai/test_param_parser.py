@@ -1,7 +1,7 @@
 from typing import Any, cast
 
 from dais_sdk.providers.openai import OpenAIProviderMessageParser, OpenAIProviderParamParser
-from dais_sdk.types.message import UserMessage
+from dais_sdk.types.message import ResolvedUserMessage
 from dais_sdk.types.request_params import LlmRequestParams
 
 
@@ -13,7 +13,7 @@ def test_parse_nonstream_maps_core_fields_and_extra_args() -> None:
     parser = _build_parser()
     params = LlmRequestParams(
         model="gpt-4o-mini",
-        messages=[UserMessage(content="hello")],
+        messages=[ResolvedUserMessage(content="hello")],
         tool_choice="required",
         temperature=0.3,
         max_tokens=128,
@@ -39,7 +39,7 @@ def test_parse_nonstream_includes_instructions_as_system_message() -> None:
     parser = _build_parser()
     params = LlmRequestParams(
         model="gpt-4o-mini",
-        messages=[UserMessage(content="hello")],
+        messages=[ResolvedUserMessage(content="hello")],
         instructions="Follow policy",
     )
 
@@ -57,7 +57,7 @@ def test_parse_nonstream_without_tools_does_not_inject_tools_key() -> None:
     parser = _build_parser()
     params = LlmRequestParams(
         model="gpt-4o-mini",
-        messages=[UserMessage(content="hello")],
+        messages=[ResolvedUserMessage(content="hello")],
     )
 
     parsed = cast(dict[str, Any], parser.parse_nonstream(params))
@@ -74,7 +74,7 @@ def test_parse_nonstream_with_tools_injects_tools_key() -> None:
 
     params = LlmRequestParams(
         model="gpt-4o-mini",
-        messages=[UserMessage(content="hello")],
+        messages=[ResolvedUserMessage(content="hello")],
         tools=[search_docs],
     )
 
@@ -91,7 +91,7 @@ def test_parse_stream_sets_stream_flags_and_include_usage() -> None:
     parser = _build_parser()
     params = LlmRequestParams(
         model="gpt-4o-mini",
-        messages=[UserMessage(content="hello")],
+        messages=[ResolvedUserMessage(content="hello")],
     )
 
     parsed = cast(dict[str, Any], parser.parse_stream(params))

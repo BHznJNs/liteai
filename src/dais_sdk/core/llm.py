@@ -1,18 +1,21 @@
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from collections.abc import Generator
 from dataclasses import replace
 
-from dais_sdk.types.content_block import ContentBlockResolver
+from ..logger import logger
 from ..providers import LlmProviders
 from ..types.message import ResolvedUserMessage, UserMessage
+from ..types.content_block import ContentBlock
 
 if TYPE_CHECKING:
     from ..providers import BaseProvider
     from ..types import (
+        ContentBlockResolver,
         LlmRequestParams, StreamMessageGenerator,
         StreamMessageEvent, AssistantMessage,
     )
+
 
 class LLM:
     def __init__(self,
@@ -40,11 +43,18 @@ class LLM:
         resolved_messages = []
         for message in params.messages:
             if isinstance(message, UserMessage):
+                resolved_content_blocks: list[ContentBlock] | None
                 if message.attachments is not None:
                     content_block_resolve_tasks = [self._content_block_resolver.resolve(attachment) for attachment in message.attachments]
-                    resolved_content_blocks = await asyncio.gather(*content_block_resolve_tasks)
+                    content_block_resolve_result = await asyncio.gather(*content_block_resolve_tasks)
+                    if None in content_block_resolve_result:
+                        logger.warning("`None` appeared in content_block_resolver results, which will be skipped")
+                        resolved_content_blocks = [block for block in content_block_resolve_result if block is not None]
+                    else:
+                        resolved_content_blocks = cast(list[ContentBlock], content_block_resolve_result)
                 else:
                     resolved_content_blocks = None
+
                 resolved_messages.append(ResolvedUserMessage(
                     id=message.id,
                     content=message.content,

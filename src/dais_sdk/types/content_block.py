@@ -38,7 +38,7 @@ type ContentBlock = TextBlock | ImageBlock | DocumentBlock | AudioBlock | VideoB
 type ContentBlockMetadata = dict[str, Any]
 
 class ContentBlockResolver(Protocol):
-    async def resolve(self, metadata: ContentBlockMetadata) -> ContentBlock: ...
+    async def resolve(self, metadata: ContentBlockMetadata) -> ContentBlock | None: ...
 
 __all__ = [
     "ContentBlock",
