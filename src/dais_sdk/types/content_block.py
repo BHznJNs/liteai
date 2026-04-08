@@ -1,4 +1,4 @@
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Mapping, Protocol
 from pydantic import BaseModel
 
 
@@ -36,7 +36,7 @@ class VideoBlock(BaseModel):
 type ContentBlock = TextBlock | ImageBlock | DocumentBlock | AudioBlock | VideoBlock
 
 type ContentBlockType = Literal["text", "image", "document", "audio", "video"]
-type ContentBlockMetadata = dict[str, Any]
+type ContentBlockMetadata = Mapping[str, Any]
 
 class ContentBlockResolver(Protocol):
     async def resolve(self, metadata: ContentBlockMetadata) -> ContentBlock | None: ...
