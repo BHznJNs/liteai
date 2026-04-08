@@ -213,7 +213,7 @@ wheels = [
 
 [[package]]
 name = "dais-sdk"
-version = "0.10.4"
+version = "0.10.5"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },

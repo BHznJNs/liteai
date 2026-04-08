@@ -1,5 +1,5 @@
 import asyncio
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Sequence, cast
 from collections.abc import Generator
 from dataclasses import replace
 
@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from ..providers import BaseProvider
     from ..types import (
         ContentBlockResolver,
+        BaseMessage,
         LlmRequestParams, StreamMessageGenerator,
         StreamMessageEvent, AssistantMessage,
     )
@@ -21,7 +22,7 @@ class LLM:
     def __init__(self,
                  name: str,
                  provider: BaseProvider,
-                 content_block_resolver: ContentBlockResolver
+                 content_block_resolver: ContentBlockResolver | None = None,
                  ):
         self._name = name
         self._provider = provider
@@ -40,12 +41,16 @@ class LLM:
                 raise ValueError(f"Unsupported provider type: {provider_type}")
 
     async def _resolve_params(self, params: LlmRequestParams) -> LlmRequestParams:
-        resolved_messages = []
-        for message in params.messages:
-            if isinstance(message, UserMessage):
+        async def resolve_messages(content_block_resolver: ContentBlockResolver, messages: Sequence[BaseMessage]) -> list[BaseMessage]:
+            resolved_messages = []
+            for message in messages:
+                if not isinstance(message, UserMessage):
+                    resolved_messages.append(message)
+                    continue
+
                 resolved_content_blocks: list[ContentBlock] | None
                 if message.attachments is not None:
-                    content_block_resolve_tasks = [self._content_block_resolver.resolve(attachment) for attachment in message.attachments]
+                    content_block_resolve_tasks = [content_block_resolver.resolve(attachment) for attachment in message.attachments]
                     content_block_resolve_result = await asyncio.gather(*content_block_resolve_tasks)
                     if None in content_block_resolve_result:
                         logger.warning("`None` appeared in content_block_resolver results, which will be skipped")
@@ -60,8 +65,18 @@ class LLM:
                     content=message.content,
                     attachments=resolved_content_blocks,
                 ))
-                continue
-            resolved_messages.append(message)
+            return resolved_messages
+
+        if self._content_block_resolver is not None:
+            resolved_messages = await resolve_messages(self._content_block_resolver, params.messages)
+        else:
+            logger.warning("LLM.content_block_resolver not set, message resources will not be uploaded.")
+            resolved_messages = []
+            for message in params.messages:
+                if isinstance(message, UserMessage):
+                    resolved_messages.append(ResolvedUserMessage(id=message.id, content=message.content))
+                else: resolved_messages.append(message)
+
         new_params = replace(params, messages=resolved_messages)
         new_params.model = new_params.model or self._name
         return new_params
