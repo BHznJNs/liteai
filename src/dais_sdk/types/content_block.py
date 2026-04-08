@@ -35,6 +35,7 @@ class VideoBlock(BaseModel):
 
 type ContentBlock = TextBlock | ImageBlock | DocumentBlock | AudioBlock | VideoBlock
 
+type ContentBlockType = Literal["text", "image", "document", "audio", "video"]
 type ContentBlockMetadata = dict[str, Any]
 
 class ContentBlockResolver(Protocol):
@@ -42,6 +43,7 @@ class ContentBlockResolver(Protocol):
 
 __all__ = [
     "ContentBlock",
+    "ContentBlockType",
     "ContentBlockMetadata",
     "ContentBlockResolver",
 
