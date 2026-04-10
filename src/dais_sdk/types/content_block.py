@@ -39,7 +39,7 @@ type ContentBlockType = Literal["text", "image", "document", "audio", "video"]
 type ContentBlockMetadata = Mapping[str, Any]
 
 class ContentBlockResolver(Protocol):
-    async def resolve(self, metadata: ContentBlockMetadata) -> ContentBlock | None: ...
+    async def resolve(self, metadata: ContentBlockMetadata) -> list[ContentBlock] | ContentBlock | None: ...
 
 __all__ = [
     "ContentBlock",

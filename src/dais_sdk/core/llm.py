@@ -1,5 +1,5 @@
 import asyncio
-from typing import TYPE_CHECKING, Sequence, cast
+from typing import TYPE_CHECKING, Sequence
 from collections.abc import Generator
 from dataclasses import replace
 
@@ -50,13 +50,17 @@ class LLM:
 
                 resolved_content_blocks: list[ContentBlock] | None
                 if message.attachments is not None:
+                    resolved_content_blocks = []
                     content_block_resolve_tasks = [content_block_resolver.resolve(attachment) for attachment in message.attachments]
-                    content_block_resolve_result = await asyncio.gather(*content_block_resolve_tasks)
-                    if None in content_block_resolve_result:
-                        logger.warning("`None` appeared in content_block_resolver results, which will be skipped")
-                        resolved_content_blocks = [block for block in content_block_resolve_result if block is not None]
-                    else:
-                        resolved_content_blocks = cast(list[ContentBlock], content_block_resolve_result)
+                    content_block_resolve_results = await asyncio.gather(*content_block_resolve_tasks)
+                    for result in content_block_resolve_results:
+                        if result is None:
+                            logger.warning("`None` appeared in content_block_resolver results, which will be skipped")
+                            continue
+                        elif isinstance(result, list):
+                            resolved_content_blocks.extend(result)
+                        else:
+                            resolved_content_blocks.append(result)
                 else:
                     resolved_content_blocks = None
 
