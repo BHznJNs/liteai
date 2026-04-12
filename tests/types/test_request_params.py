@@ -289,6 +289,16 @@ class TestMessageGroups:
         assert group.has(assistant_message.id)
         assert not group.has("missing")
 
+    def test_message_group_find_returns_first_matching_message(self):
+        first = UserMessage(content="first")
+        second = AssistantMessage(content="second")
+        third = UserMessage(content="third")
+        group = MessageGroup(messages=[first, second, third])
+
+        found = group.find(lambda message: message.role == "user")
+
+        assert found is first
+
     def test_message_group_rejects_nested_group(self):
         inner_group = MessageGroup(messages=[UserMessage(content="inner")])
 

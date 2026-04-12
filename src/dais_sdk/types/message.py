@@ -1,6 +1,7 @@
 import json
 import uuid
 from abc import ABC
+from collections.abc import Callable
 from typing import Annotated, Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Discriminator, Field, field_validator
 from .content_block import ContentBlock, ContentBlockMetadata
@@ -141,6 +142,12 @@ class MessageGroup[M: BaseMessage](BaseMessage):
 
     def has(self, id: str) -> bool:
         return any(message.id == id for message in self.messages)
+
+    def find(self, predicator: Callable[[M], bool]) -> M | None:
+        for message in self.messages:
+            if predicator(message):
+                return message
+        return None
 
 __all__ = [
     "BaseMessage",
