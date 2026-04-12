@@ -26,6 +26,17 @@ class LlmRequestParams:
 
     _extract_tools_cache: list[ToolLike] | None = field(default=None, init=False, repr=False)
 
+    def expand_messages(self) -> list[BaseMessage]:
+        from .message import MessageGroup
+
+        expanded_messages: list[BaseMessage] = []
+        for message in self.messages:
+            if isinstance(message, MessageGroup):
+                expanded_messages.extend(message.messages)
+            else:
+                expanded_messages.append(message)
+        return expanded_messages
+
     def extract_tools(self) -> list[ToolLike] | None:
         if self._extract_tools_cache is not None:
             return self._extract_tools_cache

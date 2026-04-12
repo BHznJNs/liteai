@@ -5,12 +5,14 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Discriminator, Field, field_validator
 from .content_block import ContentBlock, ContentBlockMetadata
 
+
 class BaseMessage(BaseModel, ABC):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         validate_assignment=True,
     )
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+
 
 class SystemMessage(BaseMessage):
     model_config = ConfigDict(json_schema_extra={
@@ -19,6 +21,7 @@ class SystemMessage(BaseMessage):
 
     content: str
     role: Literal["system"] = "system"
+
 
 class ToolMessage(BaseMessage):
     model_config = ConfigDict(json_schema_extra={
@@ -59,6 +62,7 @@ class ToolMessage(BaseMessage):
             arguments=self.arguments,
             result=result,
             error=error)
+
 
 class AssistantMessage(BaseMessage):
     class ToolCall(BaseModel):
@@ -125,6 +129,19 @@ type Message = Annotated[
     Discriminator("role")
 ]
 
+class MessageGroup[M: BaseMessage](BaseMessage):
+    messages: list[M]
+
+    @field_validator("messages")
+    def validate_messages(cls, messages: list[M]) -> list[M]:
+        for message in messages:
+            if isinstance(message, MessageGroup):
+                raise ValueError("MessageGroup cannot contain another MessageGroup")
+        return messages
+
+    def has(self, id: str) -> bool:
+        return any(message.id == id for message in self.messages)
+
 __all__ = [
     "BaseMessage",
     "Message",
@@ -132,4 +149,5 @@ __all__ = [
     "UserMessage",
     "AssistantMessage",
     "ToolMessage",
+    "MessageGroup",
 ]

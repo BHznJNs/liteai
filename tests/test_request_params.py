@@ -7,6 +7,8 @@ import pytest
 from dais_sdk.types import (
     LlmRequestParams,
     UserMessage,
+    AssistantMessage,
+    MessageGroup,
     ToolDef, RawToolDef,
 )
 from dais_sdk.tool.toolset import python_tool, PythonToolset
@@ -275,6 +277,35 @@ class TestExtractTools:
         tool_names = {t.name for t in extracted}  # type: ignore
         assert "MathToolset__add" in tool_names
         assert "StringToolset__upper" in tool_names
+
+
+class TestMessageGroups:
+    def test_message_group_has_message(self):
+        user_message = UserMessage(content="hello")
+        assistant_message = AssistantMessage(content="world")
+        group = MessageGroup(messages=[user_message, assistant_message])
+
+        assert group.has(user_message.id)
+        assert group.has(assistant_message.id)
+        assert not group.has("missing")
+
+    def test_message_group_rejects_nested_group(self):
+        inner_group = MessageGroup(messages=[UserMessage(content="inner")])
+
+        with pytest.raises(ValueError, match="MessageGroup cannot contain another MessageGroup"):
+            MessageGroup(messages=[inner_group])
+
+    def test_expand_messages_flattens_message_groups(self):
+        first = UserMessage(content="first")
+        second = AssistantMessage(content="second")
+        third = UserMessage(content="third")
+        params = LlmRequestParams(
+            model="test-model",
+            messages=[first, MessageGroup(messages=[second, third])],
+        )
+
+        expanded = params.expand_messages()
+        assert expanded == [first, second, third]
 
 
 class TestFindTool:

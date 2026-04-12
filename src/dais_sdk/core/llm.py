@@ -71,12 +71,14 @@ class LLM:
                 ))
             return resolved_messages
 
+        expanded_messages = params.expand_messages()
+
         if self._content_block_resolver is not None:
-            resolved_messages = await resolve_messages(self._content_block_resolver, params.messages)
+            resolved_messages = await resolve_messages(self._content_block_resolver, expanded_messages)
         else:
             logger.warning("LLM.content_block_resolver not set, message resources will not be uploaded.")
             resolved_messages = []
-            for message in params.messages:
+            for message in expanded_messages:
                 if isinstance(message, UserMessage):
                     resolved_messages.append(ResolvedUserMessage(id=message.id, content=message.content))
                 else: resolved_messages.append(message)
