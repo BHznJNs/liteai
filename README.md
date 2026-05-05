@@ -1,6 +1,6 @@
 # Dais-SDK
 
-Dais-SDK is a LLM Agent Meta Framework.
+Dais-SDK is an LLM Agent Meta Framework.
 
 ## Installation
 

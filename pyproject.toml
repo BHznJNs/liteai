@@ -1,7 +1,7 @@
 [project]
 name = "dais-sdk"
 authors = [{ name = "BHznJNs", email = "bhznjns@outlook.com" }]
-description = "A LLM Agent Meta Framework"
+description = "An LLM Agent Meta Framework"
 readme = "README.md"
 classifiers = [
     "Development Status :: 3 - Alpha",
