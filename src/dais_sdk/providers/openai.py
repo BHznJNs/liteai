@@ -46,7 +46,7 @@ from ..types import (
     LlmRequestParams,
     ContentBlock, AudioBlock, ImageBlock, TextBlock,
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
-    AssistantMessageEvent, StreamMessageGenerator, TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
+    AssistantMessageEvent, StreamMessageGenerator, TextChunkEvent, ReasoningChunkEvent, ToolCallChunkEvent, UsageChunkEvent
 )
 from ..types.message import ResolvedUserMessage
 
@@ -64,30 +64,30 @@ class OpenAIProviderMessageParser(BaseMessageParser[
                     type="text",
                     text=content_block.text,
                 )
-            case ImageBlock() if content_block.source.type == "url":
+            case ImageBlock(source=source) if source.type == "url":
                 return ChatCompletionContentPartImageParam(
                     type="image_url",
-                    image_url={"url": content_block.source.url,
+                    image_url={"url": source.url,
                                "detail": "auto"})
-            case ImageBlock() if content_block.source.type == "base64":
+            case ImageBlock(source=source) if source.type == "base64":
                 return ChatCompletionContentPartImageParam(
                     type="image_url",
-                    image_url={"url": f"data:{content_block.source.mime_type};base64,{content_block.source.data}",
+                    image_url={"url": f"data:{source.mime_type};base64,{source.data}",
                                "detail": "auto"})
-            case AudioBlock() if content_block.source.type == "base64":
-                extname = content_block.source.mime_type.split("/")[-1]
+            case AudioBlock(source=source) if source.type == "base64":
+                extname = source.mime_type.split("/")[-1]
                 if extname not in ["mp3", "wav"]:
                     raise ContentBlockTypeNotSupportedError(f"audio/{extname}")
                 return ChatCompletionContentPartInputAudioParam(
                     type="input_audio",
-                    input_audio={"data": content_block.source.data,
+                    input_audio={"data": source.data,
                                  "format": cast(Literal["mp3", "wav"], extname)})
             case _:
                 raise ContentBlockTypeNotSupportedError(content_block.type)
 
     @override
     @staticmethod
-    def normalize_chunk(chunk: ChatCompletionChunk) -> list[TextChunkEvent | ToolCallChunkEvent | UsageChunkEvent] | None:
+    def normalize_chunk(chunk: ChatCompletionChunk) -> list[TextChunkEvent | ReasoningChunkEvent | ToolCallChunkEvent | UsageChunkEvent] | None:
         if len(chunk.choices) == 0: return None
 
         result = []
@@ -220,7 +220,10 @@ class OpenAIProviderParamParser(BaseParamParser[
             if (type(message) is ToolMessage and not message.is_complete):
                 continue
             parsed_message = self._message_parser.from_message(message)
-            transformed_messages.append(parsed_message)
+            if isinstance(parsed_message, list):
+                transformed_messages.extend(parsed_message)
+            else:
+                transformed_messages.append(parsed_message)
         return transformed_messages
 
     @override

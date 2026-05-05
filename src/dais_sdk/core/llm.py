@@ -34,6 +34,9 @@ class LLM:
             case LlmProviders.OPENAI:
                 from ..providers.openai import OpenAIProvider
                 return OpenAIProvider(base_url, api_key)
+            case LlmProviders.OPENAI_RESPONSES:
+                from ..providers.openai_responses import OpenAIResponsesProvider
+                return OpenAIResponsesProvider(base_url, api_key)
             case LlmProviders.ANTHROPIC:
                 from ..providers.anthropic import AnthropicProvider
                 return AnthropicProvider(base_url, api_key)

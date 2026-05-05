@@ -202,7 +202,10 @@ class AnthropicProviderParamParser(BaseParamParser[
             if (type(message) is ToolMessage and not message.is_complete):
                 continue
             parsed_message = self._message_parser.from_message(message)
-            transformed_messages.append(parsed_message)
+            if isinstance(parsed_message, list):
+                transformed_messages.extend(parsed_message)
+            else:
+                transformed_messages.append(parsed_message)
         return transformed_messages
 
     @override

@@ -15,7 +15,7 @@ class BaseMessageParser[TChunk, TNonStreamResponse, TProviderMessage](ABC):
 
     @staticmethod
     @abstractmethod
-    def from_message(message: BaseMessage) -> TProviderMessage: ...
+    def from_message(message: BaseMessage) -> TProviderMessage | list[TProviderMessage]: ...
 
 class BaseParamParser[TNonStreamParams, TStreamParams](ABC):
     def __init__(self, message_parser: BaseMessageParser):
