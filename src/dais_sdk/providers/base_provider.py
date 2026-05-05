@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
 from ..types.message import AssistantMessage, BaseMessage
-from ..types.event import StreamMessageGenerator, TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
+from ..types.event import ReasoningChunkEvent, StreamMessageGenerator, TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
 from ..types.request_params import LlmRequestParams
 
 
 class BaseMessageParser[TChunk, TNonStreamResponse, TProviderMessage](ABC):
     @staticmethod
     @abstractmethod
-    def normalize_chunk(chunk: TChunk) -> list[TextChunkEvent | ToolCallChunkEvent | UsageChunkEvent] | None: ...
+    def normalize_chunk(chunk: TChunk) -> list[TextChunkEvent | ReasoningChunkEvent | ToolCallChunkEvent | UsageChunkEvent] | None: ...
 
     @staticmethod
     @abstractmethod

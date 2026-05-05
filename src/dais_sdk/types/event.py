@@ -9,6 +9,10 @@ class TextChunkEvent:
     content: str
 
 @dataclass(frozen=True)
+class ReasoningChunkEvent:
+    content: str
+
+@dataclass(frozen=True)
 class UsageChunkEvent:
     input_tokens: int
     output_tokens: int
@@ -28,13 +32,14 @@ class AssistantMessageEvent:
     """
     message: AssistantMessage
 
-type StreamMessageEvent = TextChunkEvent | UsageChunkEvent | ToolCallChunkEvent | AssistantMessageEvent
+type StreamMessageEvent = TextChunkEvent | ReasoningChunkEvent | UsageChunkEvent | ToolCallChunkEvent | AssistantMessageEvent
 type StreamMessageGenerator = AsyncGenerator[StreamMessageEvent, None]
 
 __all__ = [
     "StreamMessageEvent",
     "StreamMessageGenerator",
     "TextChunkEvent",
+    "ReasoningChunkEvent",
     "UsageChunkEvent",
     "ToolCallChunkEvent",
     "AssistantMessageEvent",

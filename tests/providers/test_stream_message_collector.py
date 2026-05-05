@@ -1,5 +1,5 @@
 from dais_sdk.providers.utils import StreamMessageCollector, ToolCallCollector
-from dais_sdk.types import TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
+from dais_sdk.types import ReasoningChunkEvent, TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
 
 
 def test_tool_call_collector_collect_merges_chunks_by_index() -> None:
@@ -45,6 +45,25 @@ def test_stream_message_collector_collect_accumulates_text_and_usage() -> None:
     assert message.usage.total_tokens == 7
 
 
+def test_stream_message_collector_collect_accumulates_reasoning_and_resets_state() -> None:
+    collector = StreamMessageCollector()
+
+    collector.collect(ReasoningChunkEvent(content="first "))
+    collector.collect(ReasoningChunkEvent(content="second"))
+
+    first = collector.get_message()
+
+    assert first.reasoning_content == "first second"
+    assert first.content is None
+
+    collector.collect(ReasoningChunkEvent(content="third"))
+
+    second = collector.get_message()
+
+    assert second.reasoning_content == "third"
+    assert second.content is None
+
+
 def test_stream_message_collector_get_message_returns_result_and_resets_state() -> None:
     collector = StreamMessageCollector()
 
@@ -70,3 +89,4 @@ def test_stream_message_collector_get_message_returns_result_and_resets_state() 
     assert second.content == "second"
     assert second.tool_calls == []
     assert second.usage is None
+

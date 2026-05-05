@@ -2,7 +2,6 @@ import json
 from typing import Literal, cast, override
 from anthropic import (
     AsyncAnthropic,
-    ParsedMessageStreamEvent,
     AuthenticationError,
     BadRequestError,
     RateLimitError,
@@ -13,6 +12,7 @@ from anthropic import (
 from anthropic.types import ImageBlockParam, Message, MessageParam, TextBlockParam, ToolChoiceAnyParam, ToolChoiceAutoParam, ToolChoiceNoneParam, ToolParam, ToolResultBlockParam, ToolUseBlock, ToolUseBlockParam
 from anthropic.types.message_create_params import MessageCreateParamsBase, MessageCreateParamsNonStreaming
 from anthropic.types.tool_param import InputSchema
+from anthropic.lib.streaming import ParsedMessageStreamEvent
 from pydantic import BaseModel
 from .base_provider import BaseMessageParser, BaseParamParser, BaseProvider
 from .exception import (
@@ -30,7 +30,7 @@ from ..types import (
     LlmRequestParams,
     ContentBlock, ImageBlock, TextBlock,
     BaseMessage, SystemMessage, UserMessage, ToolMessage, AssistantMessage,
-    TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent, AssistantMessageEvent,
+    TextChunkEvent, ReasoningChunkEvent, ToolCallChunkEvent, UsageChunkEvent, AssistantMessageEvent,
 )
 from ..types.message import ResolvedUserMessage
 
@@ -68,11 +68,13 @@ class AnthropicProviderMessageParser(BaseMessageParser[
                 raise ContentBlockTypeNotSupportedError(content_block.type)
 
     @staticmethod
-    def normalize_chunk(chunk: ParsedMessageStreamEvent) -> list[TextChunkEvent | ToolCallChunkEvent | UsageChunkEvent]:
-        result: list[TextChunkEvent | ToolCallChunkEvent | UsageChunkEvent] = []
+    def normalize_chunk(chunk: ParsedMessageStreamEvent) -> list[TextChunkEvent | ReasoningChunkEvent | ToolCallChunkEvent | UsageChunkEvent]:
+        result = []
         match chunk.type:
             case "text":
                 result.append(TextChunkEvent(chunk.text))
+            case "thinking":
+                result.append(ReasoningChunkEvent(chunk.thinking))
             case "content_block_stop" if chunk.content_block.type == "tool_use":
                 result.append(ToolCallChunkEvent(
                     id=chunk.content_block.id,
@@ -90,9 +92,11 @@ class AnthropicProviderMessageParser(BaseMessageParser[
 
         for block in response.content:
             if block.type == "text":
-                content_text = block.text
+                if content_text is None: content_text = ""
+                content_text += block.text
             elif block.type == "thinking":
-                reasoning_content = block.thinking
+                if reasoning_content is None: reasoning_content = ""
+                reasoning_content += block.thinking
             elif block.type == "tool_use":
                 if tool_calls is None:
                     tool_calls = []

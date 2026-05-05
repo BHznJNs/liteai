@@ -3,7 +3,7 @@ import dataclasses
 import json
 from typing import Any, override
 from pydantic.json_schema import GenerateJsonSchema
-from ..types.event import TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
+from ..types.event import ReasoningChunkEvent, TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
 from ..types.message import AssistantMessage
 
 
@@ -67,7 +67,7 @@ class StreamMessageCollector:
         self._message_buf = AssistantMessage(content=None)
         self._tool_call_collector = ToolCallCollector()
 
-    def collect(self, chunk: TextChunkEvent | ToolCallChunkEvent | UsageChunkEvent):
+    def collect(self, chunk: TextChunkEvent | ReasoningChunkEvent | ToolCallChunkEvent | UsageChunkEvent):
         match chunk:
             case ToolCallChunkEvent():
                 self._tool_call_collector.collect(chunk)
@@ -75,6 +75,10 @@ class StreamMessageCollector:
                 if self._message_buf.content is None:
                     self._message_buf.content = ""
                 self._message_buf.content += chunk.content
+            case ReasoningChunkEvent():
+                if self._message_buf.reasoning_content is None:
+                    self._message_buf.reasoning_content = ""
+                self._message_buf.reasoning_content += chunk.content
             case UsageChunkEvent():
                 if self._message_buf.usage is None:
                     self._message_buf.usage = AssistantMessage.Usage.default()
@@ -85,12 +89,9 @@ class StreamMessageCollector:
 
     def get_message(self) -> AssistantMessage:
         self._message_buf.tool_calls = self._tool_call_collector.get_tool_calls()
-        # if self._message_buf.content is not None and self._message_buf.reasoning_content is None:
-        #     self._message_buf.content, self._message_buf.reasoning_content =\
-        #         AssistantMessage.extract_thinking_content(self._message_buf.content)
         result = self._message_buf
 
         # reset the message buffer
-        self._message_buf = AssistantMessage(content=None)
+        self._message_buf = AssistantMessage()
         self._tool_call_collector = ToolCallCollector()
         return result

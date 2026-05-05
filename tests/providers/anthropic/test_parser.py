@@ -1,6 +1,6 @@
 from typing import Any, cast
 
-from anthropic.types import ImageBlockParam, MessageParam, TextBlockParam
+from anthropic.types import ImageBlockParam, Message, MessageParam, TextBlockParam
 import pytest
 
 from dais_sdk.providers.anthropic import AnthropicProviderMessageParser
@@ -31,3 +31,46 @@ def test_from_message_resolved_user_with_text_and_image_blocks() -> None:
     assert content[1]["type"] == "text"
     assert content[1]["text"] == "extra text"
     assert content[2]["type"] == "image"
+
+
+def test_to_message_accumulates_multiple_text_blocks() -> None:
+    response = Message.model_validate({
+        "id": "msg_1",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-sonnet-4-20250514",
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "content": [
+            {"type": "text", "text": "hello "},
+            {"type": "text", "text": "world"},
+        ],
+        "usage": {"input_tokens": 3, "output_tokens": 4},
+    })
+
+    message = AnthropicProviderMessageParser.to_message(response)
+
+    assert message.content == "hello world"
+    assert message.reasoning_content is None
+
+
+def test_to_message_accumulates_multiple_thinking_blocks() -> None:
+    response = Message.model_validate({
+        "id": "msg_1",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-sonnet-4-20250514",
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "content": [
+            {"type": "thinking", "thinking": "first ", "signature": "sig_1"},
+            {"type": "thinking", "thinking": "second", "signature": "sig_2"},
+        ],
+        "usage": {"input_tokens": 3, "output_tokens": 4},
+    })
+
+    message = AnthropicProviderMessageParser.to_message(response)
+
+    assert message.content is None
+    assert message.reasoning_content == "first second"
+
