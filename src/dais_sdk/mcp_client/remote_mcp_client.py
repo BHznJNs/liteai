@@ -43,7 +43,7 @@ class RemoteMcpClient(McpClient):
         self._name = name
         self._params = params
         self._session: ClientSession | None = None
-        self._oauth_context: OAuthContext | None = self._init_oauth()
+        self._oauth_context = self._init_oauth()
         if self._params.oauth_params is not None and storage is not None:
             self._params.oauth_params._oauth_token_storage = storage
 
@@ -112,7 +112,7 @@ class RemoteMcpClient(McpClient):
 
     async def _run(self):
         custum_http_client: httpx.AsyncClient | None = None
-        if self._oauth_context:
+        if self._oauth_context is not None:
             http_client = self._oauth_context.client
             await self._oauth_context.server.start()
         else:
@@ -140,6 +140,14 @@ class RemoteMcpClient(McpClient):
         await self._ready_event.wait()
         if self._connect_error:
             raise self._connect_error
+
+    async def reconnect(self):
+        await self.disconnect()
+        self._ready_event.clear()
+        self._disconnect_event.clear()
+        self._connect_error = None
+        self._oauth_context = self._init_oauth()
+        await self.connect()
 
     @override
     async def list_tools(self) -> list[Tool]:
@@ -175,3 +183,4 @@ class RemoteMcpClient(McpClient):
             try:
                 await self._oauth_context.aclose()
             except* Exception: pass
+            self._oauth_context = None

@@ -43,6 +43,13 @@ class LocalMcpClient(McpClient):
         if self._connect_error:
             raise self._connect_error
 
+    async def reconnect(self):
+        await self.disconnect()
+        self._ready_event.clear()
+        self._disconnect_event.clear()
+        self._connect_error = None
+        await self.connect()
+
     @override
     async def list_tools(self) -> list[Tool]:
         if not self._session:
