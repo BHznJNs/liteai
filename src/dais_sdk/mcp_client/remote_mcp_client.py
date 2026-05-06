@@ -141,14 +141,6 @@ class RemoteMcpClient(McpClient):
         if self._connect_error:
             raise self._connect_error
 
-    async def reconnect(self):
-        await self.disconnect()
-        self._ready_event.clear()
-        self._disconnect_event.clear()
-        self._connect_error = None
-        self._oauth_context = self._init_oauth()
-        await self.connect()
-
     @override
     async def list_tools(self) -> list[Tool]:
         if not self._session:
@@ -169,18 +161,22 @@ class RemoteMcpClient(McpClient):
 
     @override
     async def disconnect(self):
-        if self._disconnect_event:
-            self._disconnect_event.set()
+        try:
+            if self._disconnect_event:
+                self._disconnect_event.set()
 
-        if self._run_task and not self._run_task.done():
-            try:
-                await self._run_task
-            except Exception:
-                pass
-        self._run_task = None
+            if self._run_task and not self._run_task.done():
+                try:
+                    await self._run_task
+                except Exception: pass
 
-        if self._oauth_context:
-            try:
-                await self._oauth_context.aclose()
-            except* Exception: pass
-            self._oauth_context = None
+            if self._oauth_context:
+                try:
+                    await self._oauth_context.aclose()
+                except* Exception: pass
+        finally:
+            self._ready_event.clear()
+            self._disconnect_event.clear()
+            self._run_task = None
+            self._connect_error = None
+            self._oauth_context = self._init_oauth()

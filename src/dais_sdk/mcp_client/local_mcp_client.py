@@ -43,13 +43,6 @@ class LocalMcpClient(McpClient):
         if self._connect_error:
             raise self._connect_error
 
-    async def reconnect(self):
-        await self.disconnect()
-        self._ready_event.clear()
-        self._disconnect_event.clear()
-        self._connect_error = None
-        await self.connect()
-
     @override
     async def list_tools(self) -> list[Tool]:
         if not self._session:
@@ -70,12 +63,16 @@ class LocalMcpClient(McpClient):
 
     @override
     async def disconnect(self) -> None:
-        if self._disconnect_event:
-            self._disconnect_event.set()
+        try:
+            if self._disconnect_event:
+                self._disconnect_event.set()
 
-        if self._run_task and not self._run_task.done():
-            try:
-                await self._run_task
-            except Exception:
-                pass
-        self._run_task = None
+            if self._run_task and not self._run_task.done():
+                try:
+                    await self._run_task
+                except Exception: pass
+        finally:
+            self._ready_event.clear()
+            self._disconnect_event.clear()
+            self._connect_error = None
+            self._run_task = None
