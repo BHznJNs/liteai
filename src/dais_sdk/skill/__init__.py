@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any, cast
 from .resource import SkillResource, create_from_bytes as create_resource_from_bytes
-from ..types.exceptions import InvalidSkillArchiveError
+from .exceptions import InvalidSkillArchiveError
 
 
 ZipPath = PurePosixPath
@@ -73,7 +73,7 @@ class Skill(SkillMd):
     def from_zip(cls, zip_file: zipfile.ZipFile) -> Skill:
         names = zip_file.namelist()
         paths = [ZipPath(name) for name in names]
-        
+
         skill_root = SkillParser.find_skill_root(paths)
         if skill_root is None:
             raise InvalidSkillArchiveError("Skill root not found")

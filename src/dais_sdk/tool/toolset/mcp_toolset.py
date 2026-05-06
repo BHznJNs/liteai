@@ -2,11 +2,13 @@ from dataclasses import replace
 from typing import cast, override
 from mcp.types import TextContent, ImageContent, AudioContent, ResourceLink, EmbeddedResource, TextResourceContents, BlobResourceContents
 from .toolset import Toolset
+from ..exceptions import McpConnectionErrorCode, McpConnectionError
 from ..types import ToolDef, ToolFunctionParameterSchema
 from ...mcp_client.base_mcp_client import McpClient, Tool, ToolResult
 from ...mcp_client.local_mcp_client import LocalMcpClient, LocalServerParams
 from ...mcp_client.remote_mcp_client import RemoteMcpClient, RemoteServerParams, OAuthParams
 from ...logger import logger
+
 
 class McpToolset(Toolset):
     def __init__(self, client: McpClient):
@@ -60,8 +62,23 @@ class McpToolset(Toolset):
         return "\n\n".join(content_parts)
 
     async def connect(self) -> None:
-        await self._client.connect()
-        await self.refresh_tools()
+        """
+        Raises:
+            - McpConnectionError
+        """
+        def get_first_leaf_exception(e: BaseException) -> BaseException:
+            if isinstance(e, BaseExceptionGroup):
+                return get_first_leaf_exception(e=e.exceptions[0])
+            return e
+
+        try:
+            await self._client.connect()
+            await self.refresh_tools()
+        except Exception as e:
+            leaf = get_first_leaf_exception(e)
+            logger.exception(f"MCP server connect error: {type(leaf).__name__}", exc_info=leaf)
+            error_code = McpConnectionErrorCode.from_exception(leaf)
+            raise McpConnectionError(error_code)
 
     async def disconnect(self) -> None:
         await self._client.disconnect()
