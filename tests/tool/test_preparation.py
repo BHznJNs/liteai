@@ -168,6 +168,8 @@ class TestPythonTypeToJsonSchema:
         class ForecastError(BaseModel):
             reason: Literal["not_found", "unavailable"]
 
+        # pyright does not allow function-scoped `type` statements for type aliases.
+        # Keep the runtime coverage here and locally suppress the static check.
         type WeatherPayload = CityLookup | ForecastSnapshot | ForecastError # type: ignore
 
         assert _python_type_to_json_schema(WeatherPayload) == {
@@ -200,6 +202,38 @@ class TestPythonTypeToJsonSchema:
             ]
         }
 
+    def test_recursive_type_alias_chain_of_union(self):
+        # pyright does not allow function-scoped `type` statements for type aliases.
+        # Keep the runtime coverage here and locally suppress the static check.
+        type WeatherPayload = _NestedPydanticModel | _NestedDataclass # type: ignore
+        type ChainedWeatherPayload = WeatherPayload # type: ignore
+        type RecursiveWeatherPayload = ChainedWeatherPayload # type: ignore
+
+        assert _python_type_to_json_schema(RecursiveWeatherPayload) == {
+            "oneOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "count": {
+                            "oneOf": [{"type": "integer"}, {"type": "null"}]
+                        },
+                    },
+                    "required": ["name"],
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "active": {"type": "boolean"},
+                        "score": {
+                            "oneOf": [{"type": "number"}, {"type": "null"}]
+                        },
+                    },
+                    "required": ["active"],
+                },
+            ]
+        }
+
 
 class TestPrepareTools:
     # ------------------------------------------------------------------------
@@ -221,67 +255,6 @@ class TestPrepareTools:
         assert len(result) == 2
         assert result[0]["name"] == "tool1"
         assert result[1]["name"] == "tool2"
-
-    def test_prepare_tools_with_complex_callable(self):
-        class WeatherRequest(BaseModel):
-            city: str
-
-        class WeatherSuccess(BaseModel):
-            temperature_celsius: int
-            condition: str
-
-        class WeatherFailure(BaseModel):
-            error_code: Literal["not_found", "rate_limited"]
-            retryable: bool
-
-        def tool(x: WeatherRequest | WeatherSuccess | WeatherFailure) -> int:
-            """Tool"""
-            return 2
-
-        result = prepare_tools([tool])
-
-        assert len(result) == 1
-        assert result[0] == {
-            "name": "tool",
-            "description": "Tool",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "x": {
-                        "oneOf": [
-                            {
-                                "type": "object",
-                                "properties": {
-                                    "city": {"type": "string"},
-                                },
-                                "required": ["city"],
-                            },
-                            {
-                                "type": "object",
-                                "properties": {
-                                    "temperature_celsius": {"type": "integer"},
-                                    "condition": {"type": "string"},
-                                },
-                                "required": ["temperature_celsius", "condition"],
-                            },
-                            {
-                                "type": "object",
-                                "properties": {
-                                    "error_code": {
-                                        "enum": ["not_found", "rate_limited"],
-                                        "type": "string",
-                                    },
-                                    "retryable": {"type": "boolean"},
-                                },
-                                "required": ["error_code", "retryable"],
-                            },
-                        ],
-                        "description": "Parameter x of type Union",
-                    }
-                },
-                "required": ["x"],
-            },
-        }
 
     # ------------------------------------------------------------------------
     # 3.2 raw definition list

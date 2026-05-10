@@ -44,7 +44,7 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
         origin = get_origin(python_type)
         args = get_args(python_type)
 
-    if isinstance(python_type, _TypeAliasType):
+    while isinstance(python_type, _TypeAliasType):
         python_type = python_type.__value__
         origin = get_origin(python_type)
         args = get_args(python_type)
