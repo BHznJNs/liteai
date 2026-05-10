@@ -1,5 +1,161 @@
+import dataclasses
+from typing import Literal, NotRequired, TypedDict
+
+from pydantic import BaseModel
+
 from dais_sdk.types import ToolDef
-from dais_sdk.tool.prepare import prepare_tools
+from dais_sdk.tool.prepare import prepare_tools, _python_type_to_json_schema
+
+
+class _NestedTypedDict(TypedDict):
+    flag: bool
+    tags: NotRequired[list[str]]
+
+
+@dataclasses.dataclass
+class _NestedDataclass:
+    active: bool
+    score: float | None = None
+
+
+class _NestedPydanticModel(BaseModel):
+    name: str
+    count: int | None = None
+
+
+class TestPythonTypeToJsonSchema:
+    def test_optional_type(self):
+        assert _python_type_to_json_schema(str | None) == {
+            "oneOf": [{"type": "string"}, {"type": "null"}]
+        }
+
+    def test_union_type(self):
+        assert _python_type_to_json_schema(str | int | None) == {
+            "oneOf": [
+                {"type": "string"},
+                {"type": "integer"},
+                {"type": "null"},
+            ]
+        }
+
+    def test_literal_type(self):
+        assert _python_type_to_json_schema(Literal["open", "closed"]) == {
+            "enum": ["open", "closed"],
+            "type": "string",
+        }
+
+    def test_nested_typed_dict(self):
+        class Payload(TypedDict):
+            meta: _NestedTypedDict
+            title: NotRequired[str]
+
+        assert _python_type_to_json_schema(Payload) == {
+            "type": "object",
+            "properties": {
+                "meta": {
+                    "type": "object",
+                    "properties": {
+                        "flag": {"type": "boolean"},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["flag"],
+                },
+                "title": {"type": "string"},
+            },
+            "required": ["meta"],
+        }
+
+    def test_nested_dataclass(self):
+        @dataclasses.dataclass
+        class Payload:
+            meta: _NestedDataclass
+            label: str = "default"
+
+        assert _python_type_to_json_schema(Payload) == {
+            "type": "object",
+            "properties": {
+                "meta": {
+                    "type": "object",
+                    "properties": {
+                        "active": {"type": "boolean"},
+                        "score": {
+                            "oneOf": [{"type": "number"}, {"type": "null"}]
+                        },
+                    },
+                    "required": ["active"],
+                },
+                "label": {"type": "string"},
+            },
+            "required": ["meta"],
+        }
+
+    def test_nested_pydantic_model(self):
+        class Payload(BaseModel):
+            meta: _NestedPydanticModel
+            enabled: bool = True
+
+        assert _python_type_to_json_schema(Payload) == {
+            "type": "object",
+            "properties": {
+                "meta": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "count": {
+                            "oneOf": [{"type": "integer"}, {"type": "null"}]
+                        },
+                    },
+                    "required": ["name"],
+                },
+                "enabled": {"type": "boolean"},
+            },
+            "required": ["meta"],
+        }
+
+    def test_union_of_pydantic_models(self):
+        class WeatherRequest(BaseModel):
+            city: str
+
+        class WeatherSuccess(BaseModel):
+            temperature_celsius: int
+            condition: str
+
+        class WeatherFailure(BaseModel):
+            error_code: Literal["not_found", "rate_limited"]
+            retryable: bool
+
+        WeatherMessage = WeatherRequest | WeatherSuccess | WeatherFailure
+
+        assert _python_type_to_json_schema(WeatherMessage) == {
+            "oneOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "city": {"type": "string"},
+                    },
+                    "required": ["city"],
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "temperature_celsius": {"type": "integer"},
+                        "condition": {"type": "string"},
+                    },
+                    "required": ["temperature_celsius", "condition"],
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "error_code": {
+                            "enum": ["not_found", "rate_limited"],
+                            "type": "string",
+                        },
+                        "retryable": {"type": "boolean"},
+                    },
+                    "required": ["error_code", "retryable"],
+                },
+            ]
+        }
 
 
 class TestPrepareTools:

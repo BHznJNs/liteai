@@ -9,6 +9,7 @@ import types as _types
 from collections.abc import Mapping, Sequence
 from datetime import date, datetime, time
 from typing import (Annotated as _Annotated, Literal as _Literal,
+                    NotRequired as _NotRequired, Required as _Required,
                     is_typeddict as _is_typeddict, Any, get_args,
                     get_origin, get_type_hints)
 from pydantic import BaseModel as PydanticBaseModel
@@ -38,6 +39,11 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
     args = get_args(python_type)
 
     if _Annotated is not None and origin is _Annotated and len(args) >= 1:
+        python_type = args[0]
+        origin = get_origin(python_type)
+        args = get_args(python_type)
+
+    if origin in (_NotRequired, _Required) and len(args) == 1:
         python_type = args[0]
         origin = get_origin(python_type)
         args = get_args(python_type)
