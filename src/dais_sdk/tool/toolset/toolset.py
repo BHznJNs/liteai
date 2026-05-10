@@ -6,6 +6,9 @@ if TYPE_CHECKING:
 
 class Toolset(ABC):
     def format_tool_name(self, tool_name: str) -> str:
+        if tool_name.startswith(f"{self.name}__"):
+            # already formatted, not to do duplicated formatting here
+            return tool_name
         return f"{self.name}__{tool_name}"
 
     @property
