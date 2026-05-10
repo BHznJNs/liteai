@@ -16,6 +16,14 @@ from typing import (Annotated as _Annotated, Literal as _Literal,
 from pydantic import BaseModel as PydanticBaseModel
 from .types import ToolFn, ToolDef, RawToolDef, ToolLike, ToolSchema
 
+
+PRIMITIVE_MAP = {str: "string", int: "integer", float: "number", bool: "boolean"}
+
+def _json_schema_with_description(schema: dict[str, Any], description: str | None) -> dict[str, Any]:
+    if description is None: return schema
+    if "description" in schema: return schema
+    return {**schema, "description": description}
+
 def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
     """Convert Python type annotation to a JSON Schema for a parameter.
 
@@ -38,16 +46,22 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
     """
     origin = get_origin(python_type)
     args = get_args(python_type)
+    description: str | None = None
 
-    if _Annotated is not None and origin is _Annotated and len(args) >= 1:
-        python_type = args[0]
-        origin = get_origin(python_type)
-        args = get_args(python_type)
+    if isinstance(python_type, _TypeAliasType):
+        return _python_type_to_json_schema(python_type.__value__)
 
-    while isinstance(python_type, _TypeAliasType):
-        python_type = python_type.__value__
-        origin = get_origin(python_type)
-        args = get_args(python_type)
+    if _Annotated is not None and origin is _Annotated:
+        if len(args) == 0:
+            raise ValueError(f"Unexpected Annotated type: {python_type}")
+        elif len(args) == 1:
+            return _python_type_to_json_schema(args[0])
+        else:
+            for item in args[1:]:
+                if isinstance(item, str):
+                    description = inspect.cleandoc(item)
+                    break
+            return _json_schema_with_description(_python_type_to_json_schema(args[0]), description)
 
     if origin in (_NotRequired, _Required) and len(args) == 1:
         python_type = args[0]
@@ -55,25 +69,32 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
         args = get_args(python_type)
 
     if python_type is Any:
-        return {"type": "string"}
+        schema = {"type": "string"}
+        return _json_schema_with_description(schema, description)
 
-    primitive_map = {str: "string", int: "integer", float: "number", bool: "boolean"}
-    if python_type in primitive_map:
-        return {"type": primitive_map[python_type]}
+    if python_type in PRIMITIVE_MAP:
+        schema = {"type": PRIMITIVE_MAP[python_type]}
+        return _json_schema_with_description(schema, description)
 
     if python_type is bytes:
-        return {"type": "string", "contentEncoding": "base64"}
+        schema = {"type": "string", "contentEncoding": "base64"}
+        return _json_schema_with_description(schema, description)
     if python_type is datetime:
-        return {"type": "string", "format": "date-time"}
+        schema = {"type": "string", "format": "date-time"}
+        return _json_schema_with_description(schema, description)
     if python_type is date:
-        return {"type": "string", "format": "date"}
+        schema = {"type": "string", "format": "date"}
+        return _json_schema_with_description(schema, description)
     if python_type is time:
-        return {"type": "string", "format": "time"}
+        schema = {"type": "string", "format": "time"}
+        return _json_schema_with_description(schema, description)
 
     if python_type is list:
-        return {"type": "array", "items": {"type": "string"}}
+        schema = {"type": "array", "items": {"type": "string"}}
+        return _json_schema_with_description(schema, description)
     if python_type is dict:
-        return {"type": "object", "additionalProperties": {"type": "string"}}
+        schema = {"type": "object", "additionalProperties": {"type": "string"}}
+        return _json_schema_with_description(schema, description)
 
     if origin is _Literal:
         literal_values = list(args)
@@ -86,7 +107,7 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
             schema_lit["type"] = "integer"
         elif all(isinstance(v, int | float) and not isinstance(v, bool) for v in literal_values):
             schema_lit["type"] = "number"
-        return schema_lit
+        return _json_schema_with_description(schema_lit, description)
 
     if inspect.isclass(python_type) and issubclass(python_type, enum.Enum):
         enum_values = [e.value for e in python_type]
@@ -100,7 +121,7 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
             schema["type"] = "number"
         elif value_types == {bool}:
             schema["type"] = "boolean"
-        return schema
+        return _json_schema_with_description(schema, description)
 
     if _is_typeddict(python_type):
         annotations: dict[str, Any] = getattr(python_type, "__annotations__", {}) or {}
@@ -117,10 +138,10 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
         }
         if td_required:
             schema_td["required"] = td_required
-        return schema_td
+        return _json_schema_with_description(schema_td, description)
 
     if inspect.isclass(python_type) and dataclasses.is_dataclass(python_type):
-        type_hints = get_type_hints(python_type)
+        type_hints = get_type_hints(python_type, include_extras=True)
         dc_properties: dict[str, Any] = {}
         dc_required: list[str] = []
         for field in dataclasses.fields(python_type):
@@ -134,10 +155,10 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
         schema_dc: dict[str, Any] = {"type": "object", "properties": dc_properties}
         if dc_required:
             schema_dc["required"] = dc_required
-        return schema_dc
+        return _json_schema_with_description(schema_dc, description)
 
     if inspect.isclass(python_type) and issubclass(python_type, PydanticBaseModel):
-        model_type_hints = get_type_hints(python_type)
+        model_type_hints = get_type_hints(python_type, include_extras=True)
         pd_properties: dict[str, Any] = {}
         pd_required: list[str] = []
         model_fields = getattr(python_type, "model_fields", {})
@@ -149,7 +170,7 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
         schema_pd: dict[str, Any] = {"type": "object", "properties": pd_properties}
         if pd_required:
             schema_pd["required"] = pd_required
-        return schema_pd
+        return _json_schema_with_description(schema_pd, description)
 
     if origin in (list, Sequence, set, frozenset):
         item_type = args[0] if args else Any
@@ -157,24 +178,28 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
         schema_arr: dict[str, Any] = {"type": "array", "items": item_schema or {"type": "string"}}
         if origin in (set, frozenset):
             schema_arr["uniqueItems"] = True
-        return schema_arr
+        return _json_schema_with_description(schema_arr, description)
     if origin is tuple:
         if not args:
-            return {"type": "array", "items": {"type": "string"}}
+            schema = {"type": "array", "items": {"type": "string"}}
+            return _json_schema_with_description(schema, description)
         if len(args) == 2 and args[1] is Ellipsis:
-            return {"type": "array", "items": _python_type_to_json_schema(args[0])}
+            schema = {"type": "array", "items": _python_type_to_json_schema(args[0])}
+            return _json_schema_with_description(schema, description)
         prefix_items = [_python_type_to_json_schema(a) for a in args]
-        return {
+        schema = {
             "type": "array",
             "prefixItems": prefix_items,
             "minItems": len(prefix_items),
             "maxItems": len(prefix_items),
         }
+        return _json_schema_with_description(schema, description)
 
     if origin in (dict, Mapping):
         value_type = args[1] if len(args) >= 2 else Any
         value_schema = _python_type_to_json_schema(value_type)
-        return {"type": "object", "additionalProperties": value_schema or {"type": "string"}}
+        schema = {"type": "object", "additionalProperties": value_schema or {"type": "string"}}
+        return _json_schema_with_description(schema, description)
 
     typing_union = getattr(__import__("typing"), "Union", None)
     if origin in (typing_union, _types.UnionType):
@@ -185,7 +210,8 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
             schemas = [_python_type_to_json_schema(arg) for arg in non_none_args]
             if has_none:
                 schemas.append({"type": "null"})
-            return {"oneOf": schemas}
+            schema = {"oneOf": schemas}
+            return _json_schema_with_description(schema, description)
 
         if non_none_args:
             inner = _python_type_to_json_schema(non_none_args[0])
@@ -193,29 +219,20 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
                 # if inner is `oneOf`, append null to it and prevent nested oneOf
                 if "oneOf" in inner:
                     inner["oneOf"].append({"type": "null"})
-                    return inner
-                return {"oneOf": [inner, {"type": "null"}]}
-            return inner
+                    return _json_schema_with_description(inner, description)
+                schema = {"oneOf": [inner, {"type": "null"}]}
+                return _json_schema_with_description(schema, description)
+            return _json_schema_with_description(inner, description)
 
-        return {"type": "null"} # for `Union[None]`
+        schema = {"type": "null"}
+        return _json_schema_with_description(schema, description) # for `Union[None]`
 
-    return {"type": "string"}
-
-def _parse_description(python_type: Any) -> str | None:
-    origin = get_origin(python_type)
-    if origin is not _Annotated: return None
-
-    args = get_args(python_type)
-    metadata = args[1:]
-
-    if len(metadata) == 0: return None
-    if not isinstance(metadata[0], str): return None
-    return inspect.cleandoc(metadata[0])
+    schema = {"type": "string"}
+    return _json_schema_with_description(schema, description)
 
 def _parse_callable_properties(func: ToolFn) -> tuple[dict[str, dict[str, Any]], list[str]]:
     sig = inspect.signature(func)
-    type_hints = get_type_hints(func)
-    annotated_type_hints = get_type_hints(func, include_extras=True)
+    type_hints = get_type_hints(func, include_extras=True)
 
     properties: dict[str, dict[str, Any]] = {}
     required: list[str] = []
@@ -225,16 +242,7 @@ def _parse_callable_properties(func: ToolFn) -> tuple[dict[str, dict[str, Any]],
             continue
 
         type_hint = type_hints.get(param_name, str)
-        param_schema = _python_type_to_json_schema(type_hint)
-
-        annotated_type = annotated_type_hints.get(param_name)
-        param_description = _parse_description(annotated_type)
-
-        type_name = getattr(type_hint, "__name__", str(type_hint))
-        properties[param_name] = {
-            **param_schema,
-            "description": param_description or f"Parameter {param_name} of type {type_name}",
-        }
+        properties[param_name] = _python_type_to_json_schema(type_hint)
 
         if param.default == inspect.Parameter.empty:
             required.append(param_name)

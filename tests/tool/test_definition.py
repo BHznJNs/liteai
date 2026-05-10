@@ -166,7 +166,24 @@ class TestGenerateToolDefinition:
         assert query_schema["type"] == "string"
         assert query_schema["description"] == "User search query"
 
-    def test_function_parameter_description_fallback_when_annotated_metadata_invalid_or_missing(self):
+    def test_function_parameter_nested_annotated_description(self):
+
+        def search(filters: dict[str, Annotated[str, "Filter value"]]) -> str:
+            """Search content by filters"""
+            return "ok"
+
+        result = generate_tool_definition_from_callable(search)
+        filters_schema = result["parameters"]["properties"]["filters"]
+
+        assert filters_schema == {
+            "type": "object",
+            "additionalProperties": {
+                "type": "string",
+                "description": "Filter value",
+            },
+        }
+
+    def test_function_parameter_description_not_generated_when_annotated_metadata_invalid_or_missing(self):
 
         def summarize(
             text: Annotated[str, 123],
@@ -178,8 +195,8 @@ class TestGenerateToolDefinition:
         result = generate_tool_definition_from_callable(summarize)
         props = result["parameters"]["properties"]
 
-        assert props["text"]["description"] == "Parameter text of type str"
-        assert props["language"]["description"] == "Parameter language of type str"
+        assert "description" not in props["text"]
+        assert "description" not in props["language"]
 
 class TestGenerateToolDefinitionFromToolDef:
     # ------------------------------------------------------------------------

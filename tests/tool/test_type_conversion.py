@@ -255,11 +255,93 @@ class TestPythonTypeToJsonSchema:
     # ------------------------------------------------------------------------
 
     def test_annotated_type(self):
-        assert _python_type_to_json_schema(Annotated[str, "metadata"]) == {"type": "string"}
-        assert _python_type_to_json_schema(Annotated[int, "positive"]) == {"type": "integer"}
+        assert _python_type_to_json_schema(Annotated[str, "metadata"]) == {
+            "type": "string",
+            "description": "metadata",
+        }
+        assert _python_type_to_json_schema(Annotated[int, "positive"]) == {
+            "type": "integer",
+            "description": "positive",
+        }
         assert _python_type_to_json_schema(Annotated[list[str], "non-empty"]) == {
             "type": "array",
             "items": {"type": "string"},
+            "description": "non-empty",
+        }
+
+    def test_nested_annotated_descriptions(self):
+        result = _python_type_to_json_schema(list[Annotated[str, "Item text"]])
+        assert result == {
+            "type": "array",
+            "items": {"type": "string", "description": "Item text"},
+        }
+
+    def test_typeddict_nested_annotated_descriptions(self):
+        from typing import TypedDict
+
+        class SearchInput(TypedDict):
+            query: Annotated[str, "Search query"]
+            tags: list[Annotated[str, "Tag value"]]
+
+        result = _python_type_to_json_schema(SearchInput)
+        assert result == {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string", "description": "Tag value"},
+                },
+            },
+            "required": ["query", "tags"],
+        }
+
+    def test_type_alias(self):
+        type UserId = int
+        type Tags = list[str]
+
+        assert _python_type_to_json_schema(UserId) == {"type": "integer"}
+        assert _python_type_to_json_schema(Tags) == {
+            "type": "array",
+            "items": {"type": "string"},
+        }
+
+    def test_type_alias_nested_annotated_description(self):
+        type SearchQuery = Annotated[str, "Search query"]
+        type SearchFilters = dict[str, SearchQuery]
+
+        assert _python_type_to_json_schema(SearchQuery) == {
+            "type": "string",
+            "description": "Search query",
+        }
+        assert _python_type_to_json_schema(SearchFilters) == {
+            "type": "object",
+            "additionalProperties": {
+                "type": "string",
+                "description": "Search query",
+            },
+        }
+
+    def test_annotated_uses_first_string_metadata_as_description(self):
+        schema = _python_type_to_json_schema(Annotated[str, 123, "Actual description", "Ignored"])
+        assert schema == {
+            "type": "string",
+            "description": "Actual description",
+        }
+
+    def test_annotated_description_is_cleandoced(self):
+        schema = _python_type_to_json_schema(
+            Annotated[
+                str,
+                """
+                Multi-line description.
+                    Indented detail.
+                """,
+            ]
+        )
+        assert schema == {
+            "type": "string",
+            "description": "Multi-line description.\n    Indented detail.",
         }
 
     # ------------------------------------------------------------------------
