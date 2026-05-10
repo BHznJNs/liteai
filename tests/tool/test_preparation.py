@@ -157,6 +157,49 @@ class TestPythonTypeToJsonSchema:
             ]
         }
 
+    def test_type_alias_of_pydantic_model_union(self):
+        class CityLookup(BaseModel):
+            city: str
+
+        class ForecastSnapshot(BaseModel):
+            high_celsius: int
+            low_celsius: int
+
+        class ForecastError(BaseModel):
+            reason: Literal["not_found", "unavailable"]
+
+        type WeatherPayload = CityLookup | ForecastSnapshot | ForecastError # type: ignore
+
+        assert _python_type_to_json_schema(WeatherPayload) == {
+            "oneOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "city": {"type": "string"},
+                    },
+                    "required": ["city"],
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "high_celsius": {"type": "integer"},
+                        "low_celsius": {"type": "integer"},
+                    },
+                    "required": ["high_celsius", "low_celsius"],
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "reason": {
+                            "enum": ["not_found", "unavailable"],
+                            "type": "string",
+                        },
+                    },
+                    "required": ["reason"],
+                },
+            ]
+        }
+
 
 class TestPrepareTools:
     # ------------------------------------------------------------------------
@@ -178,6 +221,67 @@ class TestPrepareTools:
         assert len(result) == 2
         assert result[0]["name"] == "tool1"
         assert result[1]["name"] == "tool2"
+
+    def test_prepare_tools_with_complex_callable(self):
+        class WeatherRequest(BaseModel):
+            city: str
+
+        class WeatherSuccess(BaseModel):
+            temperature_celsius: int
+            condition: str
+
+        class WeatherFailure(BaseModel):
+            error_code: Literal["not_found", "rate_limited"]
+            retryable: bool
+
+        def tool(x: WeatherRequest | WeatherSuccess | WeatherFailure) -> int:
+            """Tool"""
+            return 2
+
+        result = prepare_tools([tool])
+
+        assert len(result) == 1
+        assert result[0] == {
+            "name": "tool",
+            "description": "Tool",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "x": {
+                        "oneOf": [
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "city": {"type": "string"},
+                                },
+                                "required": ["city"],
+                            },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "temperature_celsius": {"type": "integer"},
+                                    "condition": {"type": "string"},
+                                },
+                                "required": ["temperature_celsius", "condition"],
+                            },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "error_code": {
+                                        "enum": ["not_found", "rate_limited"],
+                                        "type": "string",
+                                    },
+                                    "retryable": {"type": "boolean"},
+                                },
+                                "required": ["error_code", "retryable"],
+                            },
+                        ],
+                        "description": "Parameter x of type Union",
+                    }
+                },
+                "required": ["x"],
+            },
+        }
 
     # ------------------------------------------------------------------------
     # 3.2 raw definition list
