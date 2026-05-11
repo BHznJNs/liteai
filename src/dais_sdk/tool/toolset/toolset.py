@@ -6,10 +6,11 @@ if TYPE_CHECKING:
 
 class Toolset(ABC):
     def format_tool_name(self, tool_name: str) -> str:
+        sanitized_toolset_name = self.name.replace(' ', '_').replace('.', '_').replace(':', '_').replace('/', '_')
         if tool_name.startswith(f"{self.name}__"):
             # already formatted, not to do duplicated formatting here
             return tool_name
-        return f"{self.name}__{tool_name}"
+        return f"{sanitized_toolset_name}__{tool_name}"
 
     @property
     @abstractmethod
