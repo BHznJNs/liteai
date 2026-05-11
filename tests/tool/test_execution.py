@@ -19,8 +19,9 @@ class TestToolExecution:
             return a / b
 
         result = await execute_tool(divide, '{"a": 10, "b": 2}')
-        assert result == "5.0"
-        assert json.loads(result) == 5.0
+        assert result.serialized == "5.0"
+        assert result.raw == 5.0
+        assert json.loads(result.serialized) == 5.0
 
     @pytest.mark.asyncio
     async def test_execute_tool_async_function_with_list(self):
@@ -29,8 +30,9 @@ class TestToolExecution:
             return sum(numbers)
 
         result = await execute_tool(sum_list, '{"numbers": [1, 2, 3, 4, 5]}')
-        assert result == "15"
-        assert json.loads(result) == 15
+        assert result.serialized == "15"
+        assert result.raw == 15
+        assert json.loads(result.serialized) == 15
 
     # ------------------------------------------------------------------------
     # 4.6 execute_tool (async) with async functions
@@ -44,8 +46,9 @@ class TestToolExecution:
             return base ** exp
 
         result = await execute_tool(async_power, '{"base": 2, "exp": 10}')
-        assert result == "1024"
-        assert json.loads(result) == 1024
+        assert result.serialized == "1024"
+        assert result.raw == 1024
+        assert json.loads(result.serialized) == 1024
 
     @pytest.mark.asyncio
     async def test_execute_tool_async_async_function_complex(self):
@@ -55,8 +58,9 @@ class TestToolExecution:
             return [prefix + item for item in items]
 
         result = await execute_tool(async_process, '{"items": ["a", "b", "c"], "prefix": "x_"}')
-        assert isinstance(result, str)
-        assert json.loads(result) == ["x_a", "x_b", "x_c"]
+        assert isinstance(result.serialized, str)
+        assert result.raw == ["x_a", "x_b", "x_c"]
+        assert json.loads(result.serialized) == ["x_a", "x_b", "x_c"]
 
     # ------------------------------------------------------------------------
     # 4.7 execute_tool (async) with ToolDef
@@ -75,8 +79,9 @@ class TestToolExecution:
         )
 
         result = await execute_tool(tool_def, '{"n": 21}')
-        assert result == "42"
-        assert json.loads(result) == 42
+        assert result.serialized == "42"
+        assert result.raw == 42
+        assert json.loads(result.serialized) == 42
 
     @pytest.mark.asyncio
     async def test_execute_tool_async_tooldef_async(self):
@@ -93,7 +98,8 @@ class TestToolExecution:
 
         result = await execute_tool(tool_def, '{"text": "hello"}')
         # String results should pass through unchanged
-        assert result == "olleh"
+        assert result.serialized == "olleh"
+        assert result.raw == "olleh"
 
     # ------------------------------------------------------------------------
     # 4.4 error handling
@@ -121,8 +127,9 @@ class TestToolExecution:
 
         calc = Calculator()
         result = await execute_tool(calc.subtract, '{"x": 20, "y": 8}')
-        assert result == "12"
-        assert json.loads(result) == 12
+        assert result.serialized == "12"
+        assert result.raw == 12
+        assert json.loads(result.serialized) == 12
 
     @pytest.mark.asyncio
     async def test_execute_tool_async_classmethod(self):
@@ -133,8 +140,9 @@ class TestToolExecution:
                 return a * b
 
         result = await execute_tool(MathUtils.multiply, '{"a": 9, "b": 6}')
-        assert result == "54"
-        assert json.loads(result) == 54
+        assert result.serialized == "54"
+        assert result.raw == 54
+        assert json.loads(result.serialized) == 54
 
     @pytest.mark.asyncio
     async def test_execute_tool_async_staticmethod(self):
@@ -145,7 +153,8 @@ class TestToolExecution:
                 return text.upper()
 
         result = await execute_tool(StringUtils.uppercase, '{"text": "world"}')
-        assert result == "WORLD"
+        assert result.serialized == "WORLD"
+        assert result.raw == "WORLD"
 
     @pytest.mark.asyncio
     async def test_execute_tool_async_async_instance_method(self):
@@ -157,8 +166,9 @@ class TestToolExecution:
 
         calc = AsyncCalculator()
         result = await execute_tool(calc.divide, '{"x": 100, "y": 4}')
-        assert result == "25.0"
-        assert json.loads(result) == 25.0
+        assert result.serialized == "25.0"
+        assert result.raw == 25.0
+        assert json.loads(result.serialized) == 25.0
 
     # ------------------------------------------------------------------------
     # 4.6 invalid tool type error tests

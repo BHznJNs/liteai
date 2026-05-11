@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, NamedTuple
 from .execute import execute_tool
 from .utils import get_tool_name
 from .exceptions import LlmToolException, ToolArgumentDecodeError, ToolExecutionError
@@ -43,6 +43,11 @@ class ToolExceptionHandlerManager:
             return f"Unhandled tool exception | {type(e).__name__}: {e}"
         return handler(e)
 
+class ToolCallOutcome(NamedTuple):
+    result: str | None
+    error: str | None
+    raw_result: Any | None
+
 class ToolCallExecutor:
     def __init__(self):
         self._exception_handler = ToolExceptionHandlerManager()
@@ -53,14 +58,14 @@ class ToolCallExecutor:
 
     async def execute(self,
                       tool: ToolLike,
-                      arguments: str | dict) -> tuple[str | None, str | None]:
+                      arguments: str | dict) -> ToolCallOutcome:
         """
         Returns:
-            A tuple of (result, error)
+            A tuple of (result, error, raw_result)
         """
-        result, error = None, None
+        result, error, raw_result = None, None, None
         try:
-            result = await execute_tool(tool, arguments)
+            result, raw_result = await execute_tool(tool, arguments)
         except json.JSONDecodeError as e:
             assert type(arguments) is str
             _error = ToolArgumentDecodeError(get_tool_name(tool), arguments, e)
@@ -68,7 +73,7 @@ class ToolCallExecutor:
         except Exception as e:
             _error = ToolExecutionError(tool, arguments, e)
             error = self._exception_handler.handle(_error)
-        return result, error
+        return ToolCallOutcome(result, error, raw_result)
 
     def execute_sync(self,
                      tool: ToolLike,

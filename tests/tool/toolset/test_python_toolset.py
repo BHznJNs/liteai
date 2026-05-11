@@ -356,7 +356,8 @@ class TestToolsetWithExecution:
         methods = tools_instance.get_tools()
 
         result = await execute_tool(methods[0], '{"text": "hello"}')
-        assert result == "olleh"
+        assert result.serialized == "olleh"
+        assert result.raw == "olleh"
 
     # ------------------------------------------------------------------------
     # 1.9 Execute async PythonToolset method
@@ -376,8 +377,9 @@ class TestToolsetWithExecution:
         methods = toolset.get_tools()
 
         result = await execute_tool(methods[0], '{"a": 7, "b": 8}')
-        assert result == "56"
-        assert json.loads(result) == 56
+        assert result.serialized == "56"
+        assert result.raw == 56
+        assert json.loads(result.serialized) == 56
 
 
 class TestToolsetAdvanced:

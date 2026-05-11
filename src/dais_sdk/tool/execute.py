@@ -3,7 +3,7 @@ import inspect
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, is_dataclass
 from functools import singledispatch
-from typing import Any, Callable, assert_never, cast
+from typing import Any, Callable, NamedTuple, assert_never, cast
 from types import FunctionType, MethodType
 from pydantic import BaseModel
 from .types import ToolDef, ToolLike
@@ -31,8 +31,12 @@ def _result_normalizer(result: Any) -> str:
         result = result.model_dump()
     return json.dumps(result, ensure_ascii=False)
 
+class ToolResult(NamedTuple):
+    serialized: str
+    raw: Any
+
 @singledispatch
-async def execute_tool(tool: ToolLike, arguments: str | dict) -> str:
+async def execute_tool(tool: ToolLike, arguments: str | dict) -> ToolResult:
     """
     Raises:
         ValueError: If the tool type is not supported.
@@ -42,17 +46,17 @@ async def execute_tool(tool: ToolLike, arguments: str | dict) -> str:
 
 @execute_tool.register(FunctionType)
 @execute_tool.register(MethodType)
-async def _(toolfn: Callable, arguments: str | dict) -> str:
+async def _(toolfn: Callable, arguments: str | dict) -> ToolResult:
     arguments = _arguments_normalizer(arguments)
     result = (await toolfn(**arguments)
              if inspect.iscoroutinefunction(toolfn)
              else toolfn(**arguments))
-    return _result_normalizer(result)
+    return ToolResult(_result_normalizer(result), result)
 
 @execute_tool.register(ToolDef)
-async def _(tooldef: ToolDef, arguments: str | dict) -> str:
+async def _(tooldef: ToolDef, arguments: str | dict) -> ToolResult:
     arguments = _arguments_normalizer(arguments)
     result = (await tooldef.execute(**arguments)
              if inspect.iscoroutinefunction(tooldef.execute)
              else tooldef.execute(**arguments))
-    return _result_normalizer(result)
+    return ToolResult(_result_normalizer(result), result)
