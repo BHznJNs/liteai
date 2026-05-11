@@ -1,8 +1,11 @@
 import json
 import inspect
+import xml.etree.ElementTree as ET
+from dataclasses import asdict, is_dataclass
 from functools import singledispatch
 from typing import Any, Callable, assert_never, cast
 from types import FunctionType, MethodType
+from pydantic import BaseModel
 from .types import ToolDef, ToolLike
 
 
@@ -20,6 +23,12 @@ def _arguments_normalizer(arguments: str | dict) -> dict:
 def _result_normalizer(result: Any) -> str:
     if isinstance(result, str):
         return result
+    elif isinstance(result, ET.Element):
+        return ET.tostring(result, encoding="unicode", method="xml")
+    elif is_dataclass(result) and not isinstance(result, type):
+        result = asdict(result)
+    elif isinstance(result, BaseModel):
+        result = result.model_dump()
     return json.dumps(result, ensure_ascii=False)
 
 @singledispatch
