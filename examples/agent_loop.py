@@ -45,7 +45,7 @@ def agent_loop() -> None:
         is_running = False
         return "Task completed."
 
-    llm = LLM("deepseek-v3.1", provider)
+    llm = LLM("deepseek-v4-flash", provider)
     executor = ToolCallExecutor()
 
     target_file = os.getenv("TARGET_FILE", "README.md")
@@ -73,6 +73,8 @@ def agent_loop() -> None:
         assistant = llm.generate_text_sync(params)
         messages.append(assistant)
 
+        if assistant.reasoning_content is not None:
+            print("[assistant reasoning]", assistant.reasoning_content)
         print("[assistant]", assistant.content)
 
         if not assistant.tool_calls:
@@ -84,7 +86,7 @@ def agent_loop() -> None:
             if tool is None:
                 result, error = None, f"Tool not found: {tool_call.name}"
             else:
-                result, error = executor.execute_sync(tool, tool_call.arguments)
+                result, error, _ = executor.execute_sync(tool, tool_call.arguments)
 
             tool_message = ToolMessage(
                 call_id=tool_call.id,

@@ -78,7 +78,7 @@ class ToolCallExecutor:
     def execute_sync(self,
                      tool: ToolLike,
                      arguments: str | dict
-                     ) -> tuple[str | None, str | None]:
+                     ) -> ToolCallOutcome:
         """
         Synchronous wrapper of `execute`.
         """

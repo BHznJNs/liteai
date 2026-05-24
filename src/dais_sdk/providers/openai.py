@@ -51,6 +51,8 @@ from ..types import (
 from ..types.message import ResolvedUserMessage
 
 
+THIRD_PARTY_REASONING_CONTENT_KEY = "reasoning_content"
+
 class OpenAIProviderMessageParser(BaseMessageParser[
     ChatCompletionChunk,
     ChatCompletion,
@@ -105,6 +107,8 @@ class OpenAIProviderMessageParser(BaseMessageParser[
             return None
         if delta.content:
             result.append(TextChunkEvent(delta.content))
+        if (reasoning := getattr(delta, THIRD_PARTY_REASONING_CONTENT_KEY, None)) is not None:
+            result.append(ReasoningChunkEvent(reasoning))
         if delta.tool_calls:
             for tool_call in delta.tool_calls:
                 result.append(ToolCallChunkEvent(
@@ -126,6 +130,8 @@ class OpenAIProviderMessageParser(BaseMessageParser[
         message = choice.message
 
         tool_calls = None
+        reasoning_content = getattr(message, THIRD_PARTY_REASONING_CONTENT_KEY, None)
+
         if message.tool_calls:
             tool_calls = [AssistantMessage.ToolCall(
                 id=tool_call.id,
@@ -136,6 +142,7 @@ class OpenAIProviderMessageParser(BaseMessageParser[
 
         return AssistantMessage(
             content=message.content,
+            reasoning_content=reasoning_content,
             tool_calls=tool_calls,
             usage=AssistantMessage.Usage(
                 input_tokens=usage.prompt_tokens,
@@ -173,6 +180,8 @@ class OpenAIProviderMessageParser(BaseMessageParser[
                     role=message.role,
                     content=message.content,
                 )
+                if message.reasoning_content is not None:
+                    message_param[THIRD_PARTY_REASONING_CONTENT_KEY] = message.reasoning_content # type: ignore[typeddict-unknown-key]
                 if message.tool_calls is not None:
                     tool_calls = [ChatCompletionMessageFunctionToolCallParam(
                         type="function",
