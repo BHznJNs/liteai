@@ -37,12 +37,6 @@ class ToolMessage(BaseMessage):
     role: Literal["tool"] = "tool"
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("result", mode="before")
-    def validate_result(cls, v: Any) -> Any:
-        if v is None: return v
-        if isinstance(v, str): return v
-        return json.dumps(v, ensure_ascii=False)
-
     @property
     def is_complete(self) -> bool:
         return self.result is not None or self.error is not None
@@ -55,14 +49,6 @@ class ToolMessage(BaseMessage):
             return self.result
         raise ValueError(f"ToolMessage({self.id}, {self.name}) is incomplete, "
                           "result and error cannot be both None")
-
-    def with_result(self, result: str | None, error: str | None) -> ToolMessage:
-        return ToolMessage(
-            call_id=self.call_id,
-            name=self.name,
-            arguments=self.arguments,
-            result=result,
-            error=error)
 
 
 class AssistantMessage(BaseMessage):
