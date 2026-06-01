@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Literal, cast, override
+from typing import Any, Literal, cast, override
 from openai import (
     AsyncOpenAI,
     AsyncStream,
@@ -239,6 +239,12 @@ class OpenAIProviderParamParser(BaseParamParser[
 
     def _preparse_messages(self, params: LlmRequestParams) -> list[ChatCompletionMessageParam]:
         transformed_messages: list[ChatCompletionMessageParam] = []
+        pending_user_messages: list[ChatCompletionMessageParam] = []
+
+        def flush_pending_user_messages() -> None:
+            transformed_messages.extend(pending_user_messages)
+            pending_user_messages.clear()
+
         if params.instructions is not None:
             transformed_messages.append(ChatCompletionSystemMessageParam(
                 role="system",
@@ -247,9 +253,20 @@ class OpenAIProviderParamParser(BaseParamParser[
         for message in params.messages:
             parsed_message = self._message_parser.from_message(message)
             if isinstance(parsed_message, list):
-                transformed_messages.extend(parsed_message)
+                if isinstance(message, ResolvedToolMessage):
+                    for item in parsed_message:
+                        if cast(dict[str, Any], item)["role"] == "user":
+                            pending_user_messages.append(item)
+                        else:
+                            transformed_messages.append(item)
+                else:
+                    flush_pending_user_messages()
+                    transformed_messages.extend(parsed_message)
             else:
+                if cast(dict[str, Any], parsed_message)["role"] != "tool":
+                    flush_pending_user_messages()
                 transformed_messages.append(parsed_message)
+        flush_pending_user_messages()
         return transformed_messages
 
     @override
