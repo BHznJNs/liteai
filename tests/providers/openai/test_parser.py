@@ -7,7 +7,7 @@ from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from dais_sdk.providers.openai import OpenAIProviderMessageParser
 from dais_sdk.types import Base64Source, ImageBlock, TextBlock
 from dais_sdk.types.event import TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
-from dais_sdk.types.message import AssistantMessage, ResolvedUserMessage, SystemMessage, ToolMessage, UserMessage
+from dais_sdk.types.message import AssistantMessage, ResolvedToolMessage, ResolvedUserMessage, SystemMessage, ToolMessage, UserMessage
 
 
 def _chunk(
@@ -212,11 +212,12 @@ def test_from_message_assistant_with_tool_calls() -> None:
 
 
 def test_from_message_tool_complete_and_incomplete() -> None:
-    complete_msg = ToolMessage(
+    complete_msg = ResolvedToolMessage(
         call_id="call_1",
         name="sum",
         arguments={"x": 1},
-        result="ok",
+        content="ok",
+        is_error=False,
     )
 
     parsed = OpenAIProviderMessageParser.from_message(complete_msg)
@@ -232,5 +233,5 @@ def test_from_message_tool_complete_and_incomplete() -> None:
         error=None,
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Encountered unresolved tool message"):
         OpenAIProviderMessageParser.from_message(incomplete_msg)
