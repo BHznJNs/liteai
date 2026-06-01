@@ -1,4 +1,5 @@
 import uuid
+import json
 from abc import ABC
 from collections.abc import Callable
 from typing import Annotated, Any, Literal, Self
@@ -43,9 +44,8 @@ class ToolMessage(BaseMessage):
     @property
     def content(self) -> str | list[ContentBlockMetadata] | None:
         if self.error is not None:
-            return self.error
-        else:
-            return self.result
+            return json.dumps({"error": self.error}, ensure_ascii=False)
+        return self.result
 
 class ResolvedToolMessage(BaseMessage):
     call_id: str
