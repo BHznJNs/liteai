@@ -9,7 +9,7 @@ from anthropic import (
     APIConnectionError,
     APIError,
 )
-from anthropic.types import ImageBlockParam, Message, MessageParam, TextBlockParam, ToolChoiceAnyParam, ToolChoiceAutoParam, ToolChoiceNoneParam, ToolParam, ToolResultBlockParam, ToolUseBlock, ToolUseBlockParam
+from anthropic.types import ImageBlockParam, Message, MessageParam, TextBlockParam, DocumentBlockParam, ToolChoiceAnyParam, ToolChoiceAutoParam, ToolChoiceNoneParam, ToolParam, ToolResultBlockParam, ToolUseBlock, ToolUseBlockParam
 from anthropic.types.message_create_params import MessageCreateParamsBase, MessageCreateParamsNonStreaming
 from anthropic.types.tool_param import InputSchema
 from anthropic.lib.streaming import ParsedMessageStreamEvent
@@ -28,11 +28,11 @@ from .utils import StreamMessageCollector, StrictInlineJsonSchema
 from ..tool.prepare import prepare_tools
 from ..types import (
     LlmRequestParams,
-    ContentBlock, ImageBlock, TextBlock,
+    ContentBlock, ImageBlock, TextBlock, DocumentBlock,
     BaseMessage, SystemMessage, UserMessage, ToolMessage, AssistantMessage,
     TextChunkEvent, ReasoningChunkEvent, ToolCallChunkEvent, UsageChunkEvent, AssistantMessageEvent,
 )
-from ..types.message import ResolvedUserMessage
+from ..types.message import ResolvedToolMessage, ResolvedUserMessage
 
 
 class AnthropicProviderMessageParser(BaseMessageParser[
@@ -41,7 +41,7 @@ class AnthropicProviderMessageParser(BaseMessageParser[
     MessageParam,
 ]):
     @staticmethod
-    def _content_block_to_content_part(content_block: ContentBlock) -> TextBlockParam | ImageBlockParam:
+    def _content_block_to_content_part(content_block: ContentBlock) -> TextBlockParam | ImageBlockParam | DocumentBlockParam:
         match content_block:
             case TextBlock():
                 return TextBlockParam(type="text", text=content_block.text)
@@ -63,8 +63,28 @@ class AnthropicProviderMessageParser(BaseMessageParser[
                         "data": content_block.source.data
                     },
                 )
+            case DocumentBlock() if content_block.source.type == "url":
+                return DocumentBlockParam(
+                    type="document",
+                    source={"type": "url", "url": content_block.source.url},
+                )
+            case DocumentBlock() if content_block.source.type == "base64" and content_block.source.mime_type == "application/pdf":
+                return DocumentBlockParam(
+                    type="document",
+                    source={"type": "base64", "media_type": "application/pdf", "data": content_block.source.data},
+                )
+            case DocumentBlock() if content_block.source.type == "base64" and content_block.source.mime_type == "text/plain":
+                # Use `"type": "text"` instead of "base64" for text file
+                return DocumentBlockParam(
+                    type="document",
+                    source={"type": "text", "media_type": "text/plain", "data": content_block.source.data},
+                )
+            case DocumentBlock():
+                raise ContentBlockTypeNotSupportedError(
+                    getattr(content_block.source, "mime_type", content_block.source.type)
+                )
             case _:
-                # Anthropic does not support audio input via the messages API
+                # Anthropic does not support audio and video input via the messages API
                 raise ContentBlockTypeNotSupportedError(content_block.type)
 
     @staticmethod
@@ -124,17 +144,13 @@ class AnthropicProviderMessageParser(BaseMessageParser[
         match message:
             case ResolvedUserMessage() if message.attachments is None:
                 return MessageParam(role="user", content=message.content)
-
             case ResolvedUserMessage() if message.attachments is not None:
-                parts: list[TextBlockParam | ImageBlockParam] = [
+                parts: list[TextBlockParam | ImageBlockParam | DocumentBlockParam] = [
                     TextBlockParam(type="text", text=message.content)
                 ]
-                for content_block in message.attachments:
-                    parts.append(
-                        AnthropicProviderMessageParser._content_block_to_content_part(content_block)
-                    )
+                parts.extend(AnthropicProviderMessageParser._content_block_to_content_part(content_block)
+                             for content_block in message.attachments)
                 return MessageParam(role="user", content=parts)
-
             case AssistantMessage():
                 content_blocks = []
                 if message.content is not None:
@@ -156,24 +172,29 @@ class AnthropicProviderMessageParser(BaseMessageParser[
                     content_blocks.append(TextBlockParam(type="text", text=""))
 
                 return MessageParam(role="assistant", content=content_blocks)
-
-            case ToolMessage() as message:
+            case ResolvedToolMessage() as message:
+                if isinstance(message.content, list):
+                    tool_content = [AnthropicProviderMessageParser._content_block_to_content_part(content_block)
+                                    for content_block in message.content]
+                else:
+                    tool_content = message.content
                 # Anthropic tool results travel as a *user* message containing a tool_result block.
                 return MessageParam(
                     role="user",
                     content=[ToolResultBlockParam(
                         type="tool_result",
                         tool_use_id=message.call_id,
-                        content=message.content,
+                        content=tool_content,
+                        is_error=message.is_error,
                     )],
                 )
-
             case SystemMessage():
                 raise ValueError(
                     "SystemMessage must be passed as the `system` parameter, "
                     "not in the messages array."
                 )
-
+            case ToolMessage() as message:
+                raise ValueError(f"Encountered unresolved tool message: {message}")
             case UserMessage() as message:
                 raise ValueError(f"Encountered unresolved user message: {message}")
             case _:
@@ -199,8 +220,6 @@ class AnthropicProviderParamParser(BaseParamParser[
     def _preparse_messages(self, params: LlmRequestParams) -> list[MessageParam]:
         transformed_messages: list[MessageParam] = []
         for message in params.messages:
-            if (type(message) is ToolMessage and not message.is_complete):
-                continue
             parsed_message = self._message_parser.from_message(message)
             if isinstance(parsed_message, list):
                 transformed_messages.extend(parsed_message)

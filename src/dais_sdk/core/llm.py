@@ -5,8 +5,8 @@ from dataclasses import replace
 
 from ..logger import logger
 from ..providers import LlmProviders
-from ..types.message import ResolvedUserMessage, UserMessage
-from ..types.content_block import ContentBlock
+from ..types.message import ResolvedToolMessage, ResolvedUserMessage, ToolMessage, UserMessage
+from ..types.content_block import ContentBlock, ContentBlockMetadata
 
 if TYPE_CHECKING:
     from ..providers import BaseProvider
@@ -44,34 +44,54 @@ class LLM:
                 raise ValueError(f"Unsupported provider type: {provider_type}")
 
     async def _resolve_params(self, params: LlmRequestParams) -> LlmRequestParams:
+        async def resolve_content_blocks(content_block_resolver: ContentBlockResolver, metadata_list: Sequence[ContentBlockMetadata]) -> list[ContentBlock] | None:
+            resolved_content_blocks: list[ContentBlock] = []
+            content_block_resolve_tasks = [content_block_resolver.resolve(metadata) for metadata in metadata_list]
+            content_block_resolve_results = await asyncio.gather(*content_block_resolve_tasks)
+            for result in content_block_resolve_results:
+                if result is None:
+                    logger.warning("`None` appeared in content_block_resolver results, which will be skipped")
+                    continue
+                elif isinstance(result, list):
+                    resolved_content_blocks.extend(result)
+                else:
+                    resolved_content_blocks.append(result)
+            return resolved_content_blocks or None
+
         async def resolve_messages(content_block_resolver: ContentBlockResolver, messages: Sequence[BaseMessage]) -> list[BaseMessage]:
             resolved_messages = []
             for message in messages:
-                if not isinstance(message, UserMessage):
-                    resolved_messages.append(message)
-                    continue
+                match message:
+                    case UserMessage() as message:
+                        resolved_content_blocks = None
+                        if message.attachments is not None:
+                            resolved_content_blocks = await resolve_content_blocks(content_block_resolver, message.attachments)
 
-                resolved_content_blocks: list[ContentBlock] | None
-                if message.attachments is not None:
-                    resolved_content_blocks = []
-                    content_block_resolve_tasks = [content_block_resolver.resolve(attachment) for attachment in message.attachments]
-                    content_block_resolve_results = await asyncio.gather(*content_block_resolve_tasks)
-                    for result in content_block_resolve_results:
-                        if result is None:
-                            logger.warning("`None` appeared in content_block_resolver results, which will be skipped")
-                            continue
-                        elif isinstance(result, list):
-                            resolved_content_blocks.extend(result)
+                        resolved_messages.append(ResolvedUserMessage(
+                            id=message.id,
+                            content=message.content,
+                            attachments=resolved_content_blocks,
+                        ))
+                    case ToolMessage() as message if message.content is None:
+                        pass # ignore the incomplete tool message
+                    case ToolMessage() as message if message.content is not None:
+                        resolved_content: str | list[ContentBlock] | None
+                        if isinstance(message.content, list):
+                            resolved_content = await resolve_content_blocks(content_block_resolver, message.content)
                         else:
-                            resolved_content_blocks.append(result)
-                else:
-                    resolved_content_blocks = None
-
-                resolved_messages.append(ResolvedUserMessage(
-                    id=message.id,
-                    content=message.content,
-                    attachments=resolved_content_blocks,
-                ))
+                            resolved_content = message.content
+                        if resolved_content is None: continue
+                        resolved_messages.append(ResolvedToolMessage(
+                            id=message.id,
+                            call_id=message.call_id,
+                            name=message.name,
+                            arguments=message.arguments,
+                            content=resolved_content,
+                            is_error=message.error is not None,
+                            metadata=message.metadata,
+                        ))
+                    case _ as message:
+                        resolved_messages.append(message)
             return resolved_messages
 
         expanded_messages = params.expand_messages()
@@ -82,9 +102,25 @@ class LLM:
             logger.warning("LLM.content_block_resolver not set, message resources will not be uploaded.")
             resolved_messages = []
             for message in expanded_messages:
-                if isinstance(message, UserMessage):
-                    resolved_messages.append(ResolvedUserMessage(id=message.id, content=message.content))
-                else: resolved_messages.append(message)
+                match message:
+                    case UserMessage() as message:
+                        resolved_messages.append(ResolvedUserMessage(id=message.id, content=message.content))
+                    case ToolMessage() as message if message.content is None:
+                        pass # ignore the incomplete tool message
+                    case ToolMessage() as message if message.content is not None:
+                        if isinstance(message.content, list):
+                            raise ValueError("LLM.content_block_resolver not set, not able to resolve tool message resources.")
+                        resolved_messages.append(ResolvedToolMessage(
+                            id=message.id,
+                            call_id=message.call_id,
+                            name=message.name,
+                            arguments=message.arguments,
+                            content=message.content,
+                            is_error=message.error is not None,
+                            metadata=message.metadata,
+                        ))
+                    case _ as message:
+                        resolved_messages.append(message)
 
         new_params = replace(params, messages=resolved_messages)
         new_params.model = new_params.model or self._name

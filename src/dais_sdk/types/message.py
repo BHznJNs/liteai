@@ -1,4 +1,3 @@
-import json
 import uuid
 from abc import ABC
 from collections.abc import Callable
@@ -32,7 +31,7 @@ class ToolMessage(BaseMessage):
     call_id: str
     name: str
     arguments: dict[str, Any]
-    result: str | None = None
+    result: str | list[ContentBlockMetadata] | None = None
     error: str | None = None
     role: Literal["tool"] = "tool"
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -42,14 +41,20 @@ class ToolMessage(BaseMessage):
         return self.result is not None or self.error is not None
 
     @property
-    def content(self) -> str:
+    def content(self) -> str | list[ContentBlockMetadata] | None:
         if self.error is not None:
-            return json.dumps({"error": self.error}, ensure_ascii=False)
-        elif self.result is not None:
+            return self.error
+        else:
             return self.result
-        raise ValueError(f"ToolMessage({self.id}, {self.name}) is incomplete, "
-                          "result and error cannot be both None")
 
+class ResolvedToolMessage(BaseMessage):
+    call_id: str
+    name: str
+    arguments: dict[str, Any]
+    content: str | list[ContentBlock]
+    is_error: bool
+    role: Literal["tool"] = "tool"
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 class AssistantMessage(BaseMessage):
     class ToolCall(BaseModel):
@@ -142,5 +147,6 @@ __all__ = [
     "UserMessage",
     "AssistantMessage",
     "ToolMessage",
+    "ResolvedToolMessage",
     "MessageGroup",
 ]
