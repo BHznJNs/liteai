@@ -1,7 +1,10 @@
 from typing import Any, cast
 
+import pytest
+
 from dais_sdk.providers.openai import OpenAIProviderMessageParser, OpenAIProviderParamParser
-from dais_sdk.types.message import ResolvedUserMessage
+from dais_sdk.types.content_block import TextBlock
+from dais_sdk.types.message import AssistantMessage, ResolvedToolMessage, ResolvedUserMessage, ToolMessage
 from dais_sdk.types.request_params import LlmRequestParams
 
 
@@ -99,3 +102,107 @@ def test_parse_stream_sets_stream_flags_and_include_usage() -> None:
     assert parsed["stream"] is True
     assert parsed["stream_options"] == {"include_usage": True}
     assert parsed["model"] == "gpt-4o-mini"
+
+
+def test_preparse_messages_delays_tool_generated_user_messages_until_after_tool_results() -> None:
+    parser = _build_parser()
+    params = LlmRequestParams(
+        model="gpt-4o-mini",
+        messages=[
+            AssistantMessage(tool_calls=[
+                AssistantMessage.ToolCall(id="call_1", name="make_file", arguments={}),
+            ]),
+            ResolvedToolMessage(
+                call_id="call_1",
+                name="make_file",
+                arguments={},
+                content=[TextBlock(text="generated text")],
+                is_error=False,
+            ),
+            ResolvedUserMessage(content="next user message"),
+        ],
+    )
+
+    parsed = cast(dict[str, Any], parser.parse_nonstream(params))
+
+    messages = cast(list[dict[str, Any]], parsed["messages"])
+    assert [message["role"] for message in messages] == ["assistant", "tool", "user", "user"]
+    assert messages[1]["tool_call_id"] == "call_1"
+    assert "call_1" in messages[2]["content"][0]["text"]
+    assert messages[2]["content"][1] == {"type": "text", "text": "generated text"}
+    assert messages[3]["content"] == "next user message"
+
+
+def test_preparse_messages_flushes_multiple_tool_generated_user_messages_in_order() -> None:
+    parser = _build_parser()
+    params = LlmRequestParams(
+        model="gpt-4o-mini",
+        messages=[
+            AssistantMessage(tool_calls=[
+                AssistantMessage.ToolCall(id="call_1", name="make_file", arguments={}),
+                AssistantMessage.ToolCall(id="call_2", name="make_file", arguments={}),
+            ]),
+            ResolvedToolMessage(
+                call_id="call_1",
+                name="make_file",
+                arguments={},
+                content=[TextBlock(text="first")],
+                is_error=False,
+            ),
+            ResolvedToolMessage(
+                call_id="call_2",
+                name="make_file",
+                arguments={},
+                content=[TextBlock(text="second")],
+                is_error=False,
+            ),
+            ResolvedUserMessage(content="continue"),
+        ],
+    )
+
+    parsed = cast(dict[str, Any], parser.parse_nonstream(params))
+
+    messages = cast(list[dict[str, Any]], parsed["messages"])
+    assert [message["role"] for message in messages] == ["assistant", "tool", "tool", "user", "user", "user"]
+    assert messages[1]["tool_call_id"] == "call_1"
+    assert messages[2]["tool_call_id"] == "call_2"
+    assert messages[3]["content"][1] == {"type": "text", "text": "first"}
+    assert messages[4]["content"][1] == {"type": "text", "text": "second"}
+    assert messages[5]["content"] == "continue"
+
+
+def test_preparse_messages_flushes_tool_generated_user_message_at_end() -> None:
+    parser = _build_parser()
+    params = LlmRequestParams(
+        model="gpt-4o-mini",
+        messages=[
+            AssistantMessage(tool_calls=[
+                AssistantMessage.ToolCall(id="call_1", name="make_file", arguments={}),
+            ]),
+            ResolvedToolMessage(
+                call_id="call_1",
+                name="make_file",
+                arguments={},
+                content=[TextBlock(text="generated text")],
+                is_error=False,
+            ),
+        ],
+    )
+
+    parsed = cast(dict[str, Any], parser.parse_nonstream(params))
+
+    messages = cast(list[dict[str, Any]], parsed["messages"])
+    assert [message["role"] for message in messages] == ["assistant", "tool", "user"]
+    assert messages[1]["tool_call_id"] == "call_1"
+    assert messages[2]["content"][1] == {"type": "text", "text": "generated text"}
+
+
+def test_parse_nonstream_rejects_unresolved_tool_message() -> None:
+    parser = _build_parser()
+    params = LlmRequestParams(
+        model="gpt-4o-mini",
+        messages=[ToolMessage(call_id="call_1", name="sum", arguments={}, result="ok")],
+    )
+
+    with pytest.raises(ValueError, match="Encountered unresolved tool message"):
+        parser.parse_nonstream(params)
