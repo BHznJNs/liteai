@@ -31,6 +31,10 @@ from openai.types.responses import (
     ResponseReasoningItem,
     ResponseReasoningItemParam,
     ResponseReasoningTextDeltaEvent,
+    ResponseFunctionCallOutputItemParam,
+    ResponseInputTextContentParam,
+    ResponseInputImageContentParam,
+    ResponseInputFileContentParam,
     ResponseStreamEvent,
     ResponseTextConfigParam,
     ResponseTextDeltaEvent,
@@ -69,7 +73,7 @@ from ..types import (
     UsageChunkEvent,
     UserMessage,
 )
-from ..types.message import ResolvedUserMessage
+from ..types.message import ResolvedToolMessage, ResolvedUserMessage
 
 
 class OpenAIResponsesProviderMessageParser(BaseMessageParser[
@@ -78,9 +82,7 @@ class OpenAIResponsesProviderMessageParser(BaseMessageParser[
     ResponseInputItemParam,
 ]):
     @staticmethod
-    def _content_block_to_content_part(
-        content_block: ContentBlock,
-    ) -> ResponseInputContentParam:
+    def _content_block_to_user_content_part(content_block: ContentBlock) -> ResponseInputContentParam:
         match content_block:
             case TextBlock():
                 return ResponseInputTextParam(type="input_text", text=content_block.text)
@@ -99,6 +101,34 @@ class OpenAIResponsesProviderMessageParser(BaseMessageParser[
                 )
             case DocumentBlock(source=source) if source.type == "base64":
                 return ResponseInputFileParam(
+                    type="input_file",
+                    file_data=f"data:{source.mime_type};base64,{source.data}",
+                )
+            case AudioBlock():
+                raise ContentBlockTypeNotSupportedError(content_block.type)
+            case _:
+                raise ContentBlockTypeNotSupportedError(content_block.type)
+
+    @staticmethod
+    def _content_block_to_tool_content_part(content_block: ContentBlock) -> ResponseFunctionCallOutputItemParam:
+        match content_block:
+            case TextBlock():
+                return ResponseInputTextContentParam(type="input_text", text=content_block.text)
+            case ImageBlock(source=source) if source.type == "url":
+                return ResponseInputImageContentParam(type="input_image", image_url=source.url, detail="auto")
+            case ImageBlock(source=source) if source.type == "base64":
+                return ResponseInputImageContentParam(
+                    type="input_image",
+                    image_url=f"data:{source.mime_type};base64,{source.data}",
+                    detail="auto",
+                )
+            case DocumentBlock(source=source) if source.type == "url":
+                return ResponseInputFileContentParam(
+                    type="input_file",
+                    file_url=source.url,
+                )
+            case DocumentBlock(source=source) if source.type == "base64":
+                return ResponseInputFileContentParam(
                     type="input_file",
                     file_data=f"data:{source.mime_type};base64,{source.data}",
                 )
@@ -202,7 +232,7 @@ class OpenAIResponsesProviderMessageParser(BaseMessageParser[
                 )
             case ResolvedUserMessage() if message.attachments is not None:
                 attachment_contents = [
-                    OpenAIResponsesProviderMessageParser._content_block_to_content_part(content_block)
+                    OpenAIResponsesProviderMessageParser._content_block_to_user_content_part(content_block)
                     for content_block in message.attachments
                 ]
                 return EasyInputMessageParam(
@@ -242,13 +272,22 @@ class OpenAIResponsesProviderMessageParser(BaseMessageParser[
                         for tool_call in message.tool_calls
                     )
                 return messages
-            case ToolMessage() as message:
+            case ResolvedToolMessage() as message:
+                if isinstance(message.content, list):
+                    tool_output = [
+                        OpenAIResponsesProviderMessageParser._content_block_to_tool_content_part(content_block)
+                        for content_block in message.content
+                    ]
+                else:
+                    tool_output = message.content
                 return FunctionCallOutput(
                     type="function_call_output",
                     status="completed",
                     call_id=message.call_id,
-                    output=message.content,
+                    output=tool_output,
                 )
+            case ToolMessage() as message:
+                raise ValueError(f"Encountered unresolved tool message: {message}")
             case UserMessage() as message:
                 raise ValueError(f"Encountered unresolved user message: {message}")
             case _:
@@ -273,8 +312,6 @@ class OpenAIResponsesProviderParamParser(BaseParamParser[ResponseCreateParamsNon
     def _preparse_messages(self, params: LlmRequestParams) -> ResponseInputParam:
         transformed_messages: ResponseInputParam = []
         for message in params.messages:
-            if type(message) is ToolMessage and not message.is_complete:
-                continue
             parsed_messages = self._message_parser.from_message(message)
             if isinstance(parsed_messages, list):
                 transformed_messages.extend(parsed_messages)

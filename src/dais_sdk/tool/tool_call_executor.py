@@ -1,13 +1,14 @@
 import asyncio
 import json
 from typing import TYPE_CHECKING, Any, Callable, NamedTuple
+
 from .execute import execute_tool
 from .utils import get_tool_name
 from .exceptions import LlmToolException, ToolArgumentDecodeError, ToolExecutionError
 from ..logger import logger
 
 if TYPE_CHECKING:
-    from ..types import ToolLike
+    from ..types import ToolLike, ContentBlock
 
 
 type ExceptionHandler[E: LlmToolException] = Callable[[E], str]
@@ -44,7 +45,7 @@ class ToolExceptionHandlerManager:
         return handler(e)
 
 class ToolCallOutcome(NamedTuple):
-    result: str | None
+    result: str | list[ContentBlock] | None
     error: str | None
     raw_result: Any | None
 

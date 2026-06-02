@@ -7,6 +7,7 @@ from typing import Any, Callable, NamedTuple, assert_never, cast
 from types import FunctionType, MethodType
 from pydantic import BaseModel
 from .types import ToolDef, ToolLike
+from ..types import ContentBlock, TextBlock, ImageBlock, DocumentBlock, AudioBlock, VideoBlock
 
 
 def _arguments_normalizer(arguments: str | dict) -> dict:
@@ -20,19 +21,22 @@ def _arguments_normalizer(arguments: str | dict) -> dict:
     else:
         assert_never(arguments)
 
-def _result_normalizer(result: Any) -> str:
-    if isinstance(result, str):
-        return result
-    elif isinstance(result, ET.Element):
-        return ET.tostring(result, encoding="unicode", method="xml")
-    elif is_dataclass(result) and not isinstance(result, type):
-        result = asdict(result)
-    elif isinstance(result, BaseModel):
-        result = result.model_dump()
+def _result_normalizer(result: Any) -> str | list[ContentBlock]:
+    match result:
+        case str(): return result
+        case list() if all(isinstance(item, TextBlock | ImageBlock | DocumentBlock | AudioBlock | VideoBlock) for item in result):
+            return result
+        case ET.Element():
+            return ET.tostring(result, encoding="unicode", method="xml")
+        case _ if is_dataclass(result) and not isinstance(result, type):
+            result = asdict(result)
+        case BaseModel():
+            result = result.model_dump()
+        case _: pass
     return json.dumps(result, ensure_ascii=False)
 
 class ToolResult(NamedTuple):
-    serialized: str
+    serialized: str | list[ContentBlock]
     raw: Any
 
 @singledispatch

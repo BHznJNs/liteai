@@ -5,9 +5,9 @@ import pytest
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from dais_sdk.providers.openai import OpenAIProviderMessageParser
-from dais_sdk.types import Base64Source, ImageBlock, TextBlock
+from dais_sdk.types import Base64Source, ImageBlock, TextBlock, UrlSource
 from dais_sdk.types.event import TextChunkEvent, ToolCallChunkEvent, UsageChunkEvent
-from dais_sdk.types.message import AssistantMessage, ResolvedUserMessage, SystemMessage, ToolMessage, UserMessage
+from dais_sdk.types.message import AssistantMessage, ResolvedToolMessage, ResolvedUserMessage, SystemMessage, ToolMessage, UserMessage
 
 
 def _chunk(
@@ -212,11 +212,12 @@ def test_from_message_assistant_with_tool_calls() -> None:
 
 
 def test_from_message_tool_complete_and_incomplete() -> None:
-    complete_msg = ToolMessage(
+    complete_msg = ResolvedToolMessage(
         call_id="call_1",
         name="sum",
         arguments={"x": 1},
-        result="ok",
+        content="ok",
+        is_error=False,
     )
 
     parsed = OpenAIProviderMessageParser.from_message(complete_msg)
@@ -232,5 +233,79 @@ def test_from_message_tool_complete_and_incomplete() -> None:
         error=None,
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Encountered unresolved tool message"):
         OpenAIProviderMessageParser.from_message(incomplete_msg)
+
+
+def test_from_message_resolved_tool_message_content_blocks_returns_tool_and_user_messages() -> None:
+    tool_msg = ResolvedToolMessage(
+        call_id="call_1",
+        name="make_file",
+        arguments={},
+        content=[TextBlock(text="generated text")],
+        is_error=False,
+    )
+
+    parsed = cast(list[dict[str, Any]], OpenAIProviderMessageParser.from_message(tool_msg))
+
+    assert len(parsed) == 2
+    assert parsed[0]["role"] == "tool"
+    assert parsed[0]["tool_call_id"] == "call_1"
+    assert parsed[1]["role"] == "user"
+    content = cast(list[dict[str, Any]], parsed[1]["content"])
+    assert content[0]["type"] == "text"
+    assert "call_1" in content[0]["text"]
+    assert content[1] == {"type": "text", "text": "generated text"}
+
+
+def test_from_message_resolved_tool_message_content_blocks_empty_list_only_returns_tool_message() -> None:
+    tool_msg = ResolvedToolMessage(
+        call_id="call_1",
+        name="make_file",
+        arguments={},
+        content=[],
+        is_error=False,
+    )
+
+    parsed = cast(dict[str, Any], OpenAIProviderMessageParser.from_message(tool_msg))
+
+    assert parsed["role"] == "tool"
+    assert parsed["tool_call_id"] == "call_1"
+    assert isinstance(parsed["content"], str)
+
+
+def test_from_message_resolved_tool_message_content_blocks_maps_image_block() -> None:
+    tool_msg = ResolvedToolMessage(
+        call_id="call_1",
+        name="make_file",
+        arguments={},
+        content=[
+            TextBlock(text="hello"),
+            ImageBlock(source=UrlSource(url="https://example.com/image.png")),
+        ],
+        is_error=False,
+    )
+
+    parsed = cast(list[dict[str, Any]], OpenAIProviderMessageParser.from_message(tool_msg))
+
+    content = cast(list[dict[str, Any]], parsed[1]["content"])
+    assert content[1] == {"type": "text", "text": "hello"}
+    assert content[2]["type"] == "image_url"
+    assert content[2]["image_url"]["url"] == "https://example.com/image.png"
+    assert content[2]["image_url"]["detail"] == "auto"
+
+
+def test_from_message_resolved_tool_message_error_omits_is_error_field() -> None:
+    tool_msg = ResolvedToolMessage(
+        call_id="call_1",
+        name="sum",
+        arguments={},
+        content='{"error": "boom"}',
+        is_error=True,
+    )
+
+    parsed = cast(dict[str, Any], OpenAIProviderMessageParser.from_message(tool_msg))
+
+    assert parsed["role"] == "tool"
+    assert parsed["content"] == '{"error": "boom"}'
+    assert "is_error" not in parsed

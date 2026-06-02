@@ -12,8 +12,10 @@ from dais_sdk.providers.openai_responses import (
     OpenAIResponsesProviderMessageParser,
     OpenAIResponsesProviderParamParser,
 )
+from dais_sdk.providers.exception import ContentBlockTypeNotSupportedError
 from dais_sdk.types.event import AssistantMessageEvent, TextChunkEvent, UsageChunkEvent
-from dais_sdk.types.message import AssistantMessage, ResolvedUserMessage, UserMessage
+from dais_sdk.types.message import AssistantMessage, ResolvedToolMessage, ResolvedUserMessage, ToolMessage, UserMessage
+from dais_sdk.types.content_block import AudioBlock, Base64Source, DocumentBlock, ImageBlock, TextBlock, UrlSource
 from dais_sdk.types.request_params import LlmRequestParams
 
 
@@ -133,6 +135,142 @@ def test_parse_nonstream_maps_core_fields_for_responses_api() -> None:
     assert len(input_items) == 1
     assert input_items[0]["role"] == "user"
     assert input_items[0]["content"] == [{"type": "input_text", "text": "hello"}]
+
+
+def test_from_message_resolved_tool_message_string_output() -> None:
+    tool_msg = ResolvedToolMessage(
+        call_id="call_1",
+        name="sum",
+        arguments={"x": 1},
+        content="ok",
+        is_error=False,
+    )
+
+    parsed = cast(dict[str, Any], OpenAIResponsesProviderMessageParser.from_message(tool_msg))
+
+    assert parsed["type"] == "function_call_output"
+    assert parsed["call_id"] == "call_1"
+    assert parsed["output"] == "ok"
+    assert parsed["status"] == "completed"
+
+
+def test_from_message_resolved_tool_message_content_block_output() -> None:
+    tool_msg = ResolvedToolMessage(
+        call_id="call_1",
+        name="make_file",
+        arguments={},
+        content=[TextBlock(text="hello")],
+        is_error=False,
+    )
+
+    parsed = cast(dict[str, Any], OpenAIResponsesProviderMessageParser.from_message(tool_msg))
+
+    assert parsed["type"] == "function_call_output"
+    assert parsed["call_id"] == "call_1"
+    assert parsed["status"] == "completed"
+    output = cast(list[dict[str, Any]], parsed["output"])
+    assert output[0]["type"] == "input_text"
+    assert output[0]["text"] == "hello"
+
+
+def test_from_message_resolved_tool_message_maps_image_url_output() -> None:
+    tool_msg = ResolvedToolMessage(
+        call_id="call_1",
+        name="make_file",
+        arguments={},
+        content=[ImageBlock(source=UrlSource(url="https://example.com/image.png"))],
+        is_error=False,
+    )
+
+    parsed = cast(dict[str, Any], OpenAIResponsesProviderMessageParser.from_message(tool_msg))
+
+    output = cast(list[dict[str, Any]], parsed["output"])
+    assert output[0]["type"] == "input_image"
+    assert output[0]["image_url"] == "https://example.com/image.png"
+    assert output[0]["detail"] == "auto"
+
+
+def test_from_message_resolved_tool_message_maps_image_base64_output() -> None:
+    tool_msg = ResolvedToolMessage(
+        call_id="call_1",
+        name="make_file",
+        arguments={},
+        content=[ImageBlock(source=Base64Source(mime_type="image/png", data="abc"))],
+        is_error=False,
+    )
+
+    parsed = cast(dict[str, Any], OpenAIResponsesProviderMessageParser.from_message(tool_msg))
+
+    output = cast(list[dict[str, Any]], parsed["output"])
+    assert output[0]["type"] == "input_image"
+    assert output[0]["image_url"] == "data:image/png;base64,abc"
+
+
+def test_from_message_resolved_tool_message_maps_document_url_output() -> None:
+    tool_msg = ResolvedToolMessage(
+        call_id="call_1",
+        name="make_file",
+        arguments={},
+        content=[DocumentBlock(source=UrlSource(url="https://example.com/file.pdf"))],
+        is_error=False,
+    )
+
+    parsed = cast(dict[str, Any], OpenAIResponsesProviderMessageParser.from_message(tool_msg))
+
+    output = cast(list[dict[str, Any]], parsed["output"])
+    assert output[0]["type"] == "input_file"
+    assert output[0]["file_url"] == "https://example.com/file.pdf"
+
+
+def test_from_message_resolved_tool_message_maps_document_base64_output() -> None:
+    tool_msg = ResolvedToolMessage(
+        call_id="call_1",
+        name="make_file",
+        arguments={},
+        content=[DocumentBlock(source=Base64Source(mime_type="application/pdf", data="abc"))],
+        is_error=False,
+    )
+
+    parsed = cast(dict[str, Any], OpenAIResponsesProviderMessageParser.from_message(tool_msg))
+
+    output = cast(list[dict[str, Any]], parsed["output"])
+    assert output[0]["type"] == "input_file"
+    assert output[0]["file_data"] == "data:application/pdf;base64,abc"
+
+
+def test_from_message_resolved_tool_message_rejects_audio_output() -> None:
+    tool_msg = ResolvedToolMessage(
+        call_id="call_1",
+        name="make_file",
+        arguments={},
+        content=[AudioBlock(source=Base64Source(mime_type="audio/wav", data="abc"))],
+        is_error=False,
+    )
+
+    with pytest.raises(ContentBlockTypeNotSupportedError):
+        OpenAIResponsesProviderMessageParser.from_message(tool_msg)
+
+
+def test_from_message_resolved_tool_message_error_output_status_stays_completed() -> None:
+    tool_msg = ResolvedToolMessage(
+        call_id="call_1",
+        name="sum",
+        arguments={},
+        content='{"error": "boom"}',
+        is_error=True,
+    )
+
+    parsed = cast(dict[str, Any], OpenAIResponsesProviderMessageParser.from_message(tool_msg))
+
+    assert parsed["status"] == "completed"
+    assert parsed["output"] == '{"error": "boom"}'
+
+
+def test_from_message_rejects_unresolved_tool_message_for_responses_api() -> None:
+    with pytest.raises(ValueError, match="Encountered unresolved tool message"):
+        OpenAIResponsesProviderMessageParser.from_message(
+            ToolMessage(call_id="call_1", name="sum", arguments={}, result="ok")
+        )
 
 
 def test_parse_nonstream_with_tools_injects_function_tools() -> None:

@@ -7,6 +7,7 @@ from ..types import ToolDef, ToolFunctionParameterSchema
 from ...mcp_client.base_mcp_client import McpClient, Tool, ToolResult
 from ...mcp_client.local_mcp_client import LocalMcpClient, LocalServerParams
 from ...mcp_client.remote_mcp_client import RemoteMcpClient, RemoteServerParams, OAuthParams
+from ...types import AudioBlock, Base64Source, ContentBlock, DocumentBlock, ImageBlock, TextBlock, UrlSource, VideoBlock
 from ...logger import logger
 
 
@@ -16,7 +17,7 @@ class McpToolset(Toolset):
         self._tools_cache: list[ToolDef] | None = None
 
     def _mcp_tool_to_tool_def(self, mcp_tool: Tool) -> ToolDef:
-        async def wrapper(**kwargs) -> str:
+        async def wrapper(**kwargs) -> list[ContentBlock]:
             result = await self._client.call_tool(mcp_tool.name, kwargs)
             return self._format_tool_result(result)
 
@@ -28,38 +29,48 @@ class McpToolset(Toolset):
         )
         return tool_def
 
-    def _format_tool_result(self, result: ToolResult) -> str:
+    def _format_tool_result(self, result: ToolResult) -> list[ContentBlock]:
         is_error, content = result.is_error, result.content
-        content_parts = []
+        content_blocks: list[ContentBlock] = []
 
         if is_error:
-            content_parts.append("Error executing tool:")
+            content_blocks.append(TextBlock(text="Error executing tool:"))
 
         for block in content:
             match block:
                 case TextContent():
-                    content_parts.append(block.text)
+                    content_blocks.append(TextBlock(text=block.text))
                 case ImageContent():
-                    content_parts.append(f"[Generated Image: {block.mimeType}]")
+                    content_blocks.append(ImageBlock(source=Base64Source(
+                        mime_type=block.mimeType,
+                        data=block.data,
+                    )))
                 case AudioContent():
-                    content_parts.append(f"[Generated Audio: {block.mimeType}]")
+                    content_blocks.append(AudioBlock(source=Base64Source(
+                        mime_type=block.mimeType,
+                        data=block.data,
+                    )))
                 case ResourceLink():
                     details = [f"Resource Reference: {block.uri}"]
                     if block.mimeType: details.append(f"Type: {block.mimeType}")
                     if block.size: details.append(f"Size: {block.size} bytes")
                     if block.description: details.append(f"Description: {block.description}")
-                    content_parts.append("\n".join(details))
-                case EmbeddedResource():
+                    content_blocks.append(TextBlock(text="\n".join(details)))
+                case EmbeddedResource() if isinstance(block.resource, TextResourceContents):
+                    content_blocks.append(TextBlock(text=block.resource.text))
+                case EmbeddedResource() if isinstance(block.resource, BlobResourceContents):
                     resource = block.resource
-                    header = f"Resource ({resource.uri}):"
-                    if isinstance(resource, TextResourceContents):
-                        content_parts.append(f"{header}\n{resource.text}")
-                    elif isinstance(resource, BlobResourceContents):
-                        content_parts.append(f"{header}\n[Binary data: {resource.mimeType}]")
+                    mime_type = resource.mimeType or "application/octet-stream"
+                    source = Base64Source(mime_type=mime_type,
+                                          data=resource.blob)
+                    if mime_type.startswith("image/"): content_blocks.append(ImageBlock(source=source))
+                    elif mime_type.startswith("audio/"): content_blocks.append(AudioBlock(source=source))
+                    elif mime_type.startswith("video/"): content_blocks.append(VideoBlock(source=source))
+                    else: content_blocks.append(DocumentBlock(source=source))
                 case _:
                     logger.warning(f"Unknown tool result block type: {type(block)}")
 
-        return "\n\n".join(content_parts)
+        return content_blocks
 
     async def connect(self) -> None:
         """
