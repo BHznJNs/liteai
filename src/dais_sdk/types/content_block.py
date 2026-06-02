@@ -41,11 +41,15 @@ type ContentBlockMetadata = Mapping[str, Any]
 class ContentBlockResolver(Protocol):
     async def resolve(self, metadata: ContentBlockMetadata) -> list[ContentBlock] | ContentBlock | None: ...
 
+class ContentBlockPersister(Protocol):
+    async def persist(self, content_block: ContentBlock) -> ContentBlockMetadata: ...
+
 __all__ = [
     "ContentBlock",
     "ContentBlockType",
     "ContentBlockMetadata",
     "ContentBlockResolver",
+    "ContentBlockPersister",
 
     "FileSource",
     "Base64Source",

@@ -1,6 +1,6 @@
 import json
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 
 if TYPE_CHECKING:
@@ -60,11 +60,18 @@ class ToolDoesNotExistError(LlmToolException):
         super().__init__(f"Tool does not exist: '{tool_name}'")
         self.tool_name = tool_name
 
-class ToolArgumentDecodeError(LlmToolException):
+class ToolArgumentParsingError(LlmToolException):
     def __init__(self, tool_name: str, arguments: str, raw_error: json.JSONDecodeError):
-        super().__init__("Tool argument decode error: ", raw_error)
+        super().__init__("Tool argument parsing error: ", raw_error)
         self.tool_name = tool_name
         self.arguments = arguments
+        self.raw_error = raw_error
+
+class ToolResultSerializationError(LlmToolException):
+    def __init__(self, tool_name: str, raw_result: Any, raw_error: Exception):
+        super().__init__("Tool result serialization error: ", raw_error)
+        self.tool_name = tool_name
+        self.raw_result = raw_result
         self.raw_error = raw_error
 
 class ToolExecutionError(LlmToolException):

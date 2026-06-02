@@ -1,9 +1,8 @@
 import asyncio
 import json
-
 import pytest
-
 from dais_sdk.types import ToolDef
+from dais_sdk.types.exceptions import ToolArgumentParsingError
 from dais_sdk.tool.execute import execute_tool
 
 
@@ -111,7 +110,7 @@ class TestToolExecution:
             """Dummy function"""
             return x
 
-        with pytest.raises(json.JSONDecodeError):
+        with pytest.raises(ToolArgumentParsingError):
             await execute_tool(dummy, 'not valid json')
 
     # ------------------------------------------------------------------------

@@ -6,7 +6,7 @@ from dais_sdk.tool.tool_call_executor import ToolExceptionHandlerManager
 from dais_sdk.types import (
     ToolDef,
     ToolDoesNotExistError,
-    ToolArgumentDecodeError,
+    ToolArgumentParsingError,
     ToolExecutionError,
 )
 
@@ -40,15 +40,15 @@ class TestToolExceptionHandlerManager:
         assert manager._handlers[ToolDoesNotExistError] == handler
 
     def test_set_handler_tool_argument_decode_error(self):
-        """Test setting handler for ToolArgumentDecodeError"""
+        """Test setting handler for ToolArgumentParsingError"""
         manager = ToolExceptionHandlerManager()
 
         def handler(e) -> str:
             return f"Invalid arguments for tool {e.tool_name}"
 
-        manager.set_handler(ToolArgumentDecodeError, handler)
-        assert ToolArgumentDecodeError in manager._handlers
-        assert manager._handlers[ToolArgumentDecodeError] == handler
+        manager.set_handler(ToolArgumentParsingError, handler)
+        assert ToolArgumentParsingError in manager._handlers
+        assert manager._handlers[ToolArgumentParsingError] == handler
 
     def test_set_handler_tool_execution_error(self):
         """Test setting handler for ToolExecutionError"""
@@ -92,15 +92,15 @@ class TestToolExceptionHandlerManager:
         assert manager._handlers[ToolDoesNotExistError] == handler
 
     def test_register_decorator_tool_argument_decode_error(self):
-        """Test register decorator for ToolArgumentDecodeError"""
+        """Test register decorator for ToolArgumentParsingError"""
         manager = ToolExceptionHandlerManager()
 
-        @manager.register(ToolArgumentDecodeError)
+        @manager.register(ToolArgumentParsingError)
         def handler(e) -> str:
             return f"Failed to decode arguments: {e.arguments}"
 
-        assert ToolArgumentDecodeError in manager._handlers
-        assert manager._handlers[ToolArgumentDecodeError] == handler
+        assert ToolArgumentParsingError in manager._handlers
+        assert manager._handlers[ToolArgumentParsingError] == handler
 
     def test_register_decorator_tool_execution_error(self):
         """Test register decorator for ToolExecutionError"""
@@ -159,10 +159,10 @@ class TestToolExceptionHandlerManager:
             return "Decode error"
 
         manager.set_handler(ToolDoesNotExistError, not_exist_handler)
-        manager.set_handler(ToolArgumentDecodeError, decode_handler)
+        manager.set_handler(ToolArgumentParsingError, decode_handler)
 
         assert manager.get_handler(ToolDoesNotExistError) == not_exist_handler
-        assert manager.get_handler(ToolArgumentDecodeError) == decode_handler
+        assert manager.get_handler(ToolArgumentParsingError) == decode_handler
         assert manager.get_handler(ToolExecutionError) is None
 
     # ------------------------------------------------------------------------
@@ -183,15 +183,15 @@ class TestToolExceptionHandlerManager:
         assert result == "Custom: Tool my_tool not found"
 
     def test_handle_with_tool_argument_decode_error(self):
-        """Test handle method with ToolArgumentDecodeError"""
+        """Test handle method with ToolArgumentParsingError"""
         manager = ToolExceptionHandlerManager()
 
-        @manager.register(ToolArgumentDecodeError)
+        @manager.register(ToolArgumentParsingError)
         def handler(e) -> str:
             return f"Bad args for {e.tool_name}: {e.arguments}"
 
         raw_error = json.JSONDecodeError("test", "invalid", 0)
-        exception = ToolArgumentDecodeError("test_tool", "invalid json", raw_error)
+        exception = ToolArgumentParsingError("test_tool", "invalid json", raw_error)
         result = manager.handle(exception)
 
         assert result == "Bad args for test_tool: invalid json"
@@ -260,11 +260,11 @@ class TestToolExceptionHandlerManager:
             result1 = manager.handle(not_exist)
             assert "ToolDoesNotExistError" in result1
 
-            # ToolArgumentDecodeError
+            # ToolArgumentParsingError
             raw_error = json.JSONDecodeError("test", "bad", 0)
-            decode_error = ToolArgumentDecodeError("tool2", "bad json", raw_error)
+            decode_error = ToolArgumentParsingError("tool2", "bad json", raw_error)
             result2 = manager.handle(decode_error)
-            assert "ToolArgumentDecodeError" in result2
+            assert "ToolArgumentParsingError" in result2
 
             # ToolExecutionError
             exec_error = ToolExecutionError(mock_tool, "{}", RuntimeError("fail"))
@@ -289,7 +289,7 @@ class TestToolExceptionHandlerManager:
         def not_exist_handler(e) -> str:
             return f"NotExist: {e.tool_name}"
 
-        @manager.register(ToolArgumentDecodeError)
+        @manager.register(ToolArgumentParsingError)
         def decode_handler(e) -> str:
             return f"Decode: {e.tool_name}"
 
@@ -301,7 +301,7 @@ class TestToolExceptionHandlerManager:
         assert manager.handle(ToolDoesNotExistError("t1")) == "NotExist: t1"
 
         raw_error = json.JSONDecodeError("test", "bad", 0)
-        assert manager.handle(ToolArgumentDecodeError("t2", "bad", raw_error)) == "Decode: t2"
+        assert manager.handle(ToolArgumentParsingError("t2", "bad", raw_error)) == "Decode: t2"
 
         assert manager.handle(ToolExecutionError(mock_tool, "{}", Exception())) == "Exec: test_tool"
 

@@ -11,7 +11,7 @@ from ..providers.exception import (
 from ..tool.exceptions import (
     LlmToolException,
     ToolDoesNotExistError,
-    ToolArgumentDecodeError,
+    ToolArgumentParsingError,
     ToolExecutionError,
     McpConnectionErrorCode,
     McpConnectionError,
@@ -25,7 +25,7 @@ from ..skill.exceptions import (
 __all__ = [
     "LlmToolException",
     "ToolDoesNotExistError",
-    "ToolArgumentDecodeError",
+    "ToolArgumentParsingError",
     "ToolExecutionError",
 
     "ProviderError",
