@@ -161,6 +161,6 @@ class TestResultNormalizer:
 
     def test_result_normalizer_empty_collections(self):
         """Empty collections should be serialized correctly"""
-        assert _result_normalizer([]) == "[]"
+        assert _result_normalizer([]) == []
         assert _result_normalizer({}) == "{}"
         assert _result_normalizer(tuple()) == "[]"

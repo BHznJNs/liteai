@@ -168,7 +168,16 @@ class TestToolExecution:
         result = await execute_tool(calc.divide, '{"x": 100, "y": 4}')
         assert result.serialized == "25.0"
         assert result.raw == 25.0
-        assert json.loads(result.serialized) == 25.0
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_async_empty_list_result_preserves_list(self):
+        def generate_empty() -> list:
+            """Return an empty content block list"""
+            return []
+
+        result = await execute_tool(generate_empty, '{}')
+        assert result.serialized == []
+        assert result.raw == []
 
     # ------------------------------------------------------------------------
     # 4.6 invalid tool type error tests

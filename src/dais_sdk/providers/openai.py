@@ -196,6 +196,12 @@ class OpenAIProviderMessageParser(BaseMessageParser[
             case ResolvedToolMessage() as message:
                 content = message.content
                 if isinstance(content, list):
+                    if len(content) == 0:
+                        return ChatCompletionToolMessageParam(
+                            role=message.role,
+                            content="[System] Tool executed successfully.",
+                            tool_call_id=message.call_id,
+                        )
                     return cast(list[ChatCompletionMessageParam], [
                         ChatCompletionToolMessageParam(
                             role=message.role,

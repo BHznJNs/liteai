@@ -56,7 +56,9 @@ class LLM:
                     resolved_content_blocks.extend(result)
                 else:
                     resolved_content_blocks.append(result)
-            return resolved_content_blocks or None
+            if len(metadata_list) > 0 and len(resolved_content_blocks) == 0:
+                return None
+            return resolved_content_blocks
 
         async def resolve_messages(content_block_resolver: ContentBlockResolver, messages: Sequence[BaseMessage]) -> list[BaseMessage]:
             resolved_messages = []
@@ -109,13 +111,17 @@ class LLM:
                         pass # ignore the incomplete tool message
                     case ToolMessage() as message if message.content is not None:
                         if isinstance(message.content, list):
-                            raise ValueError("LLM.content_block_resolver not set, not able to resolve tool message resources.")
+                            if len(message.content) > 0:
+                                raise ValueError("LLM.content_block_resolver not set, not able to resolve tool message resources.")
+                            resolved_content = []
+                        else:
+                            resolved_content = message.content
                         resolved_messages.append(ResolvedToolMessage(
                             id=message.id,
                             call_id=message.call_id,
                             name=message.name,
                             arguments=message.arguments,
-                            content=message.content,
+                            content=resolved_content,
                             is_error=message.error is not None,
                             metadata=message.metadata,
                         ))

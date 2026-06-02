@@ -82,6 +82,34 @@ async def test_resolve_params_skips_incomplete_tool_message() -> None:
 
 
 @pytest.mark.asyncio
+async def test_resolve_params_resolves_tool_message_empty_content_blocks_with_resolver() -> None:
+    params = LlmRequestParams(messages=[
+        ToolMessage(call_id="call_1", name="generate_file", arguments={}, result=[])
+    ])
+
+    resolved = await _build_llm(StubContentBlockResolver({}))._resolve_params(params)
+
+    assert len(resolved.messages) == 1
+    message = resolved.messages[0]
+    assert isinstance(message, ResolvedToolMessage)
+    assert message.content == []
+
+
+@pytest.mark.asyncio
+async def test_resolve_params_resolves_tool_message_empty_content_blocks_without_resolver() -> None:
+    params = LlmRequestParams(messages=[
+        ToolMessage(call_id="call_1", name="generate_file", arguments={}, result=[])
+    ])
+
+    resolved = await _build_llm()._resolve_params(params)
+
+    assert len(resolved.messages) == 1
+    message = resolved.messages[0]
+    assert isinstance(message, ResolvedToolMessage)
+    assert message.content == []
+
+
+@pytest.mark.asyncio
 async def test_resolve_params_rejects_tool_message_content_blocks_without_resolver() -> None:
     params = LlmRequestParams(messages=[
         ToolMessage(

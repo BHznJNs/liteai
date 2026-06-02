@@ -258,6 +258,22 @@ def test_from_message_resolved_tool_message_content_blocks_returns_tool_and_user
     assert content[1] == {"type": "text", "text": "generated text"}
 
 
+def test_from_message_resolved_tool_message_content_blocks_empty_list_only_returns_tool_message() -> None:
+    tool_msg = ResolvedToolMessage(
+        call_id="call_1",
+        name="make_file",
+        arguments={},
+        content=[],
+        is_error=False,
+    )
+
+    parsed = cast(dict[str, Any], OpenAIProviderMessageParser.from_message(tool_msg))
+
+    assert parsed["role"] == "tool"
+    assert parsed["tool_call_id"] == "call_1"
+    assert isinstance(parsed["content"], str)
+
+
 def test_from_message_resolved_tool_message_content_blocks_maps_image_block() -> None:
     tool_msg = ResolvedToolMessage(
         call_id="call_1",
