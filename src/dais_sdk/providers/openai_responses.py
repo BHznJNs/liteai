@@ -104,8 +104,6 @@ class OpenAIResponsesProviderMessageParser(BaseMessageParser[
                     type="input_file",
                     file_data=f"data:{source.mime_type};base64,{source.data}",
                 )
-            case AudioBlock():
-                raise ContentBlockTypeNotSupportedError(content_block.type)
             case _:
                 raise ContentBlockTypeNotSupportedError(content_block.type)
 
