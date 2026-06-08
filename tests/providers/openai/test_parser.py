@@ -211,6 +211,29 @@ def test_from_message_assistant_with_tool_calls() -> None:
     assert tool_calls[0]["function"]["arguments"] == '{"x": 1, "y": 2}'
 
 
+def test_from_message_assistant_tool_calls_none_omits_key() -> None:
+    assistant = AssistantMessage()
+    assistant.content = "hello"
+
+    parsed = cast(dict[str, Any], OpenAIProviderMessageParser.from_message(assistant))
+
+    assert parsed["role"] == "assistant"
+    assert parsed["content"] == "hello"
+    assert "tool_calls" not in parsed
+
+
+def test_from_message_assistant_tool_calls_empty_list_omits_key() -> None:
+    assistant = AssistantMessage()
+    assistant.content = "hello"
+    assistant.tool_calls = []
+
+    parsed = cast(dict[str, Any], OpenAIProviderMessageParser.from_message(assistant))
+
+    assert parsed["role"] == "assistant"
+    assert parsed["content"] == "hello"
+    assert "tool_calls" not in parsed
+
+
 def test_from_message_tool_complete_and_incomplete() -> None:
     complete_msg = ResolvedToolMessage(
         call_id="call_1",

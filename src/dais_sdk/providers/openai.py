@@ -182,7 +182,7 @@ class OpenAIProviderMessageParser(BaseMessageParser[
                 )
                 if message.reasoning_content is not None:
                     message_param[THIRD_PARTY_REASONING_CONTENT_KEY] = message.reasoning_content # type: ignore[typeddict-unknown-key]
-                if message.tool_calls is not None:
+                if message.tool_calls is not None and len(message.tool_calls) > 0:
                     tool_calls = [ChatCompletionMessageFunctionToolCallParam(
                         type="function",
                         id=tool_call.id,
