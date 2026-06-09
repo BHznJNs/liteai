@@ -180,6 +180,8 @@ class OpenAIProviderMessageParser(BaseMessageParser[
                     role=message.role,
                     content=message.content,
                 )
+                if message.content is None and message.tool_calls is None:
+                    return [] # ignore this message
                 if message.reasoning_content is not None:
                     message_param[THIRD_PARTY_REASONING_CONTENT_KEY] = message.reasoning_content # type: ignore[typeddict-unknown-key]
                 if message.tool_calls is not None and len(message.tool_calls) > 0:
