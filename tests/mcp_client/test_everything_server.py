@@ -19,6 +19,7 @@ from dais_sdk.mcp_client import (
     RemoteMcpClient,
     RemoteServerParams,
 )
+from dais_sdk.tool.toolset.mcp_toolset import McpToolset
 
 STREAMABLE_HTTP_HOST = "127.0.0.1"
 STREAMABLE_HTTP_PORT = 3001
@@ -149,6 +150,9 @@ def _build_tool_args(schema: dict[str, Any] | None) -> dict[str, Any]:
 async def _exercise_client(client: McpClient) -> None:
     await client.connect()
     try:
+        # Verify description is accessible and has correct type after connect
+        assert isinstance(client.description, (str, type(None)))
+
         tools = await client.list_tools()
         assert tools, "Expected at least one MCP tool"
         tool = tools[0]
@@ -181,3 +185,24 @@ async def test_remote_mcp_client_streamable_http_everything(streamable_http_serv
     )
     client = RemoteMcpClient(name="everything-http", params=params)
     await _exercise_client(client)
+
+
+@pytest.mark.asyncio
+async def test_local_mcp_toolset_description() -> None:
+    """McpToolset.description should proxy client.description after connect."""
+    _skip_if_no_npx()
+    params = LocalServerParams(
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-everything", "stdio"],
+    )
+    client = LocalMcpClient(name="everything-stdio-ts", params=params)
+    toolset = McpToolset(client)
+    # Before connect, description should still be accessible (but None since not connected)
+    assert toolset.description is None
+    await toolset.connect()
+    try:
+        # After connect, description should be either a string or None
+        assert isinstance(toolset.description, (str, type(None)))
+        assert toolset.description == client.description
+    finally:
+        await toolset.disconnect()

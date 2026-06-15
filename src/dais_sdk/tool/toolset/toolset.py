@@ -22,5 +22,9 @@ class Toolset(ABC):
     @abstractmethod
     def name(self) -> str: ...
 
+    @property
+    def description(self) -> str | None:
+        return None
+
     @abstractmethod
     def get_tools(self) -> list[ToolDef]: ...

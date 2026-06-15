@@ -106,6 +106,11 @@ class McpToolset(Toolset):
         return self._client.name
 
     @property
+    @override
+    def description(self) -> str | None:
+        return self._client.description
+
+    @property
     def connected(self) -> bool:
         return self._tools_cache is not None
 

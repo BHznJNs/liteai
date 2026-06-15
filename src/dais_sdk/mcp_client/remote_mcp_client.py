@@ -41,6 +41,7 @@ class RemoteMcpClient(McpClient):
                  params: RemoteServerParams,
                  storage: TokenStorage | None = None):
         self._name = name
+        self._description: str | None = None
         self._params = params
         self._session: ClientSession | None = None
         self._oauth_context = self._init_oauth()
@@ -56,6 +57,11 @@ class RemoteMcpClient(McpClient):
     @override
     def name(self) -> str:
         return self._name
+
+    @property
+    @override
+    def description(self) -> str | None:
+        return self._description
 
     def _init_http_headers(self) -> dict[str, str] | None:
         if self._params.http_headers is None and self._params.bearer_token is None:
@@ -122,8 +128,9 @@ class RemoteMcpClient(McpClient):
         try:
             async with streamable_http_client(self._params.url, http_client=http_client) as (read_stream, write_stream, _):
                 async with ClientSession(read_stream, write_stream) as session:
-                    await session.initialize()
+                    init_result = await session.initialize()
                     self._session = session
+                    self._description = init_result.instructions
                     self._ready_event.set()
                     await self._disconnect_event.wait()
         except BaseException as e:
@@ -131,6 +138,7 @@ class RemoteMcpClient(McpClient):
             self._ready_event.set()
         finally:
             self._session = None
+            self._description = None
             if custum_http_client:
                 await custum_http_client.aclose()
 

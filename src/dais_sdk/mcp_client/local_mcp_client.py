@@ -9,6 +9,7 @@ class LocalServerParams(StdioServerParams): ...
 class LocalMcpClient(McpClient):
     def __init__(self, name: str, params: LocalServerParams):
         self._name: str = name
+        self._description: str | None = None
         self._params: LocalServerParams = params
         self._session: ClientSession | None = None
         self._run_task: asyncio.Task | None = None
@@ -21,8 +22,9 @@ class LocalMcpClient(McpClient):
         try:
             async with stdio_client(self._params) as (read_stream, write_stream):
                 async with ClientSession(read_stream, write_stream) as session:
-                    await session.initialize()
+                    init_result = await session.initialize()
                     self._session = session
+                    self._description = init_result.instructions
                     self._ready_event.set()
                     await self._disconnect_event.wait()
         except BaseException as e:
@@ -30,11 +32,17 @@ class LocalMcpClient(McpClient):
             self._ready_event.set()
         finally:
             self._session = None
+            self._description = None
 
     @property
     @override
     def name(self) -> str:
         return self._name
+
+    @property
+    @override
+    def description(self) -> str | None:
+        return self._description
 
     @override
     async def connect(self):

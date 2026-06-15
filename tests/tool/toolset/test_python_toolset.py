@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from dais_sdk.types import LlmRequestParams, UserMessage, ToolDef
-from dais_sdk.tool import python_tool, PythonToolset
+from dais_sdk.tool import python_tool, PythonToolset, Toolset
 from dais_sdk.tool.prepare import prepare_tools, generate_tool_definition_from_callable
 from dais_sdk.tool.execute import execute_tool
 
@@ -200,6 +200,31 @@ class TestToolsetBasic:
 
         toolset = MyToolset()
         assert toolset.format_tool_name("my_tool") == "MyToolset__my_tool"
+
+    def test_toolset_description_default_is_none(self):
+        """Toolset.description should default to None"""
+        class MyToolset(PythonToolset):
+            pass
+
+        toolset = MyToolset()
+        assert toolset.description is None
+
+    def test_toolset_description_can_be_overridden(self):
+        """Toolset subclasses can override description to return a custom value"""
+        class DescribedToolset(Toolset):
+            @property
+            def name(self) -> str:
+                return "described"
+
+            @property
+            def description(self) -> str | None:
+                return "A custom description"
+
+            def get_tools(self) -> list[ToolDef]:
+                return []
+
+        toolset = DescribedToolset()
+        assert toolset.description == "A custom description"
 
     # ------------------------------------------------------------------------
     # 1.3 PythonToolset with single tool

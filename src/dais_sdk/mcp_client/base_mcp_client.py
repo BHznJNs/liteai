@@ -14,6 +14,10 @@ class McpClient(ABC):
     @abstractmethod
     def name(self) -> str: ...
 
+    @property
+    def description(self) -> str | None:
+        return None
+
     @abstractmethod
     async def connect(self): ...
     @abstractmethod
