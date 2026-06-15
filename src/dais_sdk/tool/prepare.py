@@ -112,7 +112,7 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
     if inspect.isclass(python_type) and issubclass(python_type, enum.Enum):
         enum_values = [e.value for e in python_type]
         value_types = {type(v) for v in enum_values}
-        schema: dict[str, Any] = {"enum": enum_values}
+        schema: dict[str, Any] = {"title": python_type.__name__, "enum": enum_values}
         if value_types == {str}:
             schema["type"] = "string"
         elif value_types == {int}:
@@ -134,6 +134,7 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
                 td_required.append(field_name)
         schema_td: dict[str, Any] = {
             "type": "object",
+            "title": python_type.__name__,
             "properties": td_properties,
         }
         if td_required:
@@ -152,7 +153,11 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
                 and getattr(field, "default_factory", dataclasses.MISSING) is dataclasses.MISSING
             ):
                 dc_required.append(field.name)
-        schema_dc: dict[str, Any] = {"type": "object", "properties": dc_properties}
+        schema_dc: dict[str, Any] = {
+            "type": "object",
+            "title": python_type.__name__,
+            "properties": dc_properties,
+        }
         if dc_required:
             schema_dc["required"] = dc_required
         return _json_schema_with_description(schema_dc, description)
@@ -167,7 +172,11 @@ def _python_type_to_json_schema(python_type: Any) -> dict[str, Any]:
             is_required = getattr(field_info, "is_required", None)
             if callable(is_required) and is_required():
                 pd_required.append(name)
-        schema_pd: dict[str, Any] = {"type": "object", "properties": pd_properties}
+        schema_pd: dict[str, Any] = {
+            "type": "object",
+            "title": python_type.__name__,
+            "properties": pd_properties
+        }
         if pd_required:
             schema_pd["required"] = pd_required
         return _json_schema_with_description(schema_pd, description)

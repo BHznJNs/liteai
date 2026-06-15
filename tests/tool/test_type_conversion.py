@@ -142,7 +142,7 @@ class TestPythonTypeToJsonSchema:
             GREEN = "green"
             BLUE = "blue"
 
-        assert _python_type_to_json_schema(Color) == {"type": "string", "enum": ["red", "green", "blue"]}
+        assert _python_type_to_json_schema(Color) == {"type": "string", "title": "Color", "enum": ["red", "green", "blue"]}
 
     def test_integer_enum(self):
         class Status(enum.Enum):
@@ -150,7 +150,7 @@ class TestPythonTypeToJsonSchema:
             ACTIVE = 1
             COMPLETED = 2
 
-        assert _python_type_to_json_schema(Status) == {"type": "integer", "enum": [0, 1, 2]}
+        assert _python_type_to_json_schema(Status) == {"type": "integer", "title": "Status", "enum": [0, 1, 2]}
 
     def test_mixed_number_enum(self):
         class Priority(enum.Enum):
@@ -158,14 +158,14 @@ class TestPythonTypeToJsonSchema:
             MEDIUM = 2.5
             HIGH = 5
 
-        assert _python_type_to_json_schema(Priority) == {"type": "number", "enum": [1, 2.5, 5]}
+        assert _python_type_to_json_schema(Priority) == {"type": "number", "title": "Priority", "enum": [1, 2.5, 5]}
 
     def test_boolean_enum(self):
         class Toggle(enum.Enum):
             ON = True
             OFF = False
 
-        assert _python_type_to_json_schema(Toggle) == {"type": "boolean", "enum": [True, False]}
+        assert _python_type_to_json_schema(Toggle) == {"type": "boolean", "title": "Toggle", "enum": [True, False]}
 
     # ------------------------------------------------------------------------
     # 1.9 TypedDict tests
@@ -181,6 +181,7 @@ class TestPythonTypeToJsonSchema:
         result = _python_type_to_json_schema(Person)
         assert result == {
             "type": "object",
+            "title": "Person",
             "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
             "required": ["name", "age"],
         }
@@ -194,6 +195,7 @@ class TestPythonTypeToJsonSchema:
 
         result = _python_type_to_json_schema(User)
         assert result["type"] == "object"
+        assert result["title"] == "User"
         assert "username" in result["properties"]
         assert "email" in result["properties"]
         assert "required" not in result or result.get("required") == []
@@ -212,6 +214,7 @@ class TestPythonTypeToJsonSchema:
         result = _python_type_to_json_schema(Config)
         assert result == {
             "type": "object",
+            "title": "Config",
             "properties": {
                 "host": {"type": "string"},
                 "port": {"type": "integer"},
@@ -227,6 +230,7 @@ class TestPythonTypeToJsonSchema:
             items: list[str] = dataclasses.field(default_factory=list)
 
         result = _python_type_to_json_schema(Container)
+        assert result["title"] == "Container"
         assert "name" in result["required"]
         assert "items" not in result.get("required", [])
         assert result["properties"]["items"] == {"type": "array", "items": {"type": "string"}}
@@ -286,6 +290,7 @@ class TestPythonTypeToJsonSchema:
         result = _python_type_to_json_schema(SearchInput)
         assert result == {
             "type": "object",
+            "title": "SearchInput",
             "properties": {
                 "query": {"type": "string", "description": "Search query"},
                 "tags": {
