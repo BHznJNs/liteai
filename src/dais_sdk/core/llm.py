@@ -5,6 +5,7 @@ from dataclasses import replace
 
 from ..logger import logger
 from ..providers import LlmProviders
+from ..types.exceptions import ProviderTimeoutError
 from ..types.message import ResolvedToolMessage, ResolvedUserMessage, ToolMessage, UserMessage
 from ..types.content_block import ContentBlock, ContentBlockMetadata
 
@@ -139,10 +140,20 @@ class LLM:
     def generate_text_sync(self, params: LlmRequestParams) -> AssistantMessage:
         return asyncio.run(self.generate_text(params))
 
-    async def stream_text(self, params: LlmRequestParams) -> StreamMessageGenerator:
+    async def stream_text(self, params: LlmRequestParams, *, chunk_timeout_sec: int = 60) -> StreamMessageGenerator:
         resolved_params = await self._resolve_params(params)
-        async for chunk in self._provider.request_stream(resolved_params):
-            yield chunk
+        stream = self._provider.request_stream(resolved_params)
+        while True:
+            try:
+                async with asyncio.timeout(chunk_timeout_sec):
+                    yield await stream.__anext__()
+            except TimeoutError:
+                await stream.aclose()
+                raise ProviderTimeoutError(
+                    f"Timed out waiting for the next stream chunk after {chunk_timeout_sec} seconds."
+                ) from None
+            except StopAsyncIteration:
+                break
 
     def stream_text_sync(self, params: LlmRequestParams) -> Generator[StreamMessageEvent, None, None]:
         with asyncio.Runner() as runner:
