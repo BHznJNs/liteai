@@ -22,8 +22,6 @@ dependencies = [
     "starlette>=0.50.0",
     "uvicorn>=0.40.0",
     "anthropic>=0.84.0",
-    "python-frontmatter>=1.1.0",
-    "binaryornot>=0.6.0",
 ]
 
 [dependency-groups]
