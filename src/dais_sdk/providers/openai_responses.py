@@ -41,6 +41,7 @@ from openai.types.responses import (
 )
 from openai.types.responses.response_create_params import ResponseCreateParamsNonStreaming, ResponseCreateParamsStreaming
 from openai.types.responses.response_input_item_param import FunctionCallOutput
+from openai.types.shared_params import Reasoning, ReasoningEffort
 from pydantic import BaseModel
 from .base_provider import BaseMessageParser, BaseParamParser, BaseProvider
 from .exception import (
@@ -51,6 +52,7 @@ from .exception import (
     ProviderRateLimitError,
     ProviderServerError,
     ProviderTimeoutError,
+    UnsupportedReasoningEffort,
 )
 from .utils import StreamMessageCollector, StrictInlineJsonSchema
 from ..tool.prepare import prepare_tools
@@ -328,6 +330,13 @@ class OpenAIResponsesProviderParamParser(BaseParamParser[ResponseCreateParamsNon
         )
         if params.instructions is not None:
             result_params["instructions"] = params.instructions
+        if params.reasoning is not None:
+            if params.reasoning not in ["none", "minimal", "low", "medium", "high", "xhigh", "max"]:
+                raise UnsupportedReasoningEffort("openai-responses", params.reasoning)
+            result_params["reasoning"] = Reasoning(
+                effort=cast(ReasoningEffort, params.reasoning),
+                summary="auto"
+            )
         if params.temperature is not None:
             result_params["temperature"] = params.temperature
         if params.max_tokens is not None:

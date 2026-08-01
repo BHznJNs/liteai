@@ -10,7 +10,7 @@ from anthropic import (
     APIError,
 )
 from anthropic.types import ImageBlockParam, Message, MessageParam, TextBlockParam, DocumentBlockParam, ToolChoiceAnyParam, ToolChoiceAutoParam, ToolChoiceNoneParam, ToolParam, ToolResultBlockParam, ToolUseBlock, ToolUseBlockParam
-from anthropic.types.message_create_params import MessageCreateParamsBase, MessageCreateParamsNonStreaming
+from anthropic.types.message_create_params import MessageCreateParamsBase, MessageCreateParamsNonStreaming, MessageCreateParamsStreaming
 from anthropic.types.tool_param import InputSchema
 from anthropic.lib.streaming import ParsedMessageStreamEvent
 from pydantic import BaseModel
@@ -23,6 +23,7 @@ from .exception import (
     ProviderTimeoutError,
     ProviderServerError,
     ContentBlockTypeNotSupportedError,
+    UnsupportedReasoningEffort,
 )
 from .utils import StreamMessageCollector, StrictInlineJsonSchema
 from ..tool.prepare import prepare_tools
@@ -34,6 +35,7 @@ from ..types import (
 )
 from ..types.message import ResolvedToolMessage, ResolvedUserMessage
 
+type ReasoningEffort = Literal["low", "medium", "high", "xhigh", "max"]
 
 class AnthropicProviderMessageParser(BaseMessageParser[
     ParsedMessageStreamEvent,
@@ -273,6 +275,12 @@ class AnthropicProviderParamParser(BaseParamParser[
                     "type": "json_schema",
                     "schema": params.output.model_json_schema(schema_generator=StrictInlineJsonSchema),
                 }}
+        if params.reasoning is not None:
+            result["thinking"] = {"type": "adaptive"}
+            if "output_config" not in result: result["output_config"] = {}
+            if params.reasoning not in ["low", "medium", "high", "xhigh", "max"]:
+                raise UnsupportedReasoningEffort("anthropic", params.reasoning)
+            result["output_config"]["effort"] = cast(ReasoningEffort, params.reasoning)
         return result
 
 class AnthropicProvider(BaseProvider):

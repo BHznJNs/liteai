@@ -3,6 +3,8 @@ from typing import Any, Literal, Sequence, TYPE_CHECKING
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
+    from openai.types.shared_params import ReasoningEffort as OpenAiReasoningEffort
+    from ..providers.anthropic import ReasoningEffort as AnthropicReasoningEffort
     from . import ToolLike
     from ..tool.toolset import Toolset
     from .message import BaseMessage
@@ -16,6 +18,7 @@ class LlmRequestParams:
     toolsets: list[Toolset] | None = None
     tool_choice: Literal["auto", "required", "none"] = "auto"
     output: Literal["text", "json"] | type[BaseModel] = "text"
+    reasoning: OpenAiReasoningEffort | AnthropicReasoningEffort | None = None
 
     timeout_sec: float | None = None
     temperature: float | None = None

@@ -11,7 +11,7 @@ from openai import (
     BadRequestError,
     RateLimitError,
 )
-from openai.types.shared_params import FunctionDefinition
+from openai.types.shared_params import FunctionDefinition, ReasoningEffort
 from openai.types.chat import (
     ChatCompletion,
     ChatCompletionChunk,
@@ -39,6 +39,7 @@ from .exception import (
     ProviderTimeoutError,
     ProviderBadRequestError,
     ContentBlockTypeNotSupportedError,
+    UnsupportedReasoningEffort,
 )
 from .utils import StreamMessageCollector, StrictInlineJsonSchema
 from ..tool.prepare import prepare_tools
@@ -288,6 +289,10 @@ class OpenAIProviderParamParser(BaseParamParser[
             max_tokens=params.max_tokens,
             **(params.extra_args or {})
         )
+        if params.reasoning is not None:
+            if params.reasoning not in ["none", "minimal", "low", "medium", "high", "xhigh", "max"]:
+                raise UnsupportedReasoningEffort("openai", params.reasoning)
+            result_params["reasoning_effort"] = cast(ReasoningEffort, params.reasoning)
         if (tools := self._preparse_tools(params)) is not None:
             result_params["tools"] = cast(list[ChatCompletionFunctionToolParam], tools)
         match params.output:

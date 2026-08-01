@@ -31,6 +31,10 @@ class ProviderTimeoutError(ProviderNetworkError):
     def __init__(self, message: str):
         super().__init__(f"Provider timeout error: {message}")
 
+class UnsupportedReasoningEffort(ProviderError):
+    def __init__(self, provider: str, effort: str):
+        super().__init__(f'Provider "{provider}" does not support reasoning effort "{effort}"')
+
 __all__ = [
     "ProviderError",
     "ProviderAuthenticationError",
@@ -40,4 +44,5 @@ __all__ = [
     "ProviderNetworkError",
     "ProviderTimeoutError",
     "ContentBlockTypeNotSupportedError",
+    "UnsupportedReasoningEffort",
 ]
