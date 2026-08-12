@@ -110,6 +110,7 @@ class UserMessage(BaseMessage):
     content: str
     attachments: list[ContentBlockMetadata] | None = None
     role: Literal["user"] = "user"
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 class ResolvedUserMessage(BaseMessage):
     content: str
